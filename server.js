@@ -64,11 +64,11 @@ function pwaRoom(email, sellerSlug) {
 }
 
 // ==================================================
-// 📸 UPLOAD MEDIA (BOT -> BRIDGE -> CLOUDINARY)
+// 📸 UPLOAD MEDIA
 // ==================================================
 app.post("/upload-media", upload.single("file"), async (req, res) => {
   try {
-    const { sellerSlug, clientEmail, amount } = req.body;
+    const { sellerSlug, clientEmail } = req.body;
 
     if (!req.file) {
       return res.status(400).json({ success: false, error: "No file uploaded" });
@@ -85,9 +85,6 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
       success: true,
       mediaUrl: result.secure_url,
       publicId: result.public_id,
-      amount,
-      sellerSlug,
-      clientEmail,
     });
   } catch (err) {
     console.error("UPLOAD ERROR:", err.message);
@@ -101,10 +98,6 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
 app.post("/pwa/send-paid-content", async (req, res) => {
   try {
     const { email, sellerSlug, text, checkout_url, isMedia, amount, mediaUrl } = req.body;
-
-    if (!email || !sellerSlug || !checkout_url) {
-      return res.status(400).json({ ok: false, error: "Missing email/sellerSlug/checkout_url" });
-    }
 
     const e = normEmail(email);
     const s = normSlug(sellerSlug);
@@ -130,8 +123,8 @@ app.post("/pwa/send-paid-content", async (req, res) => {
 
     return res.json({ ok: true });
   } catch (err) {
-    console.error("❌ /pwa/send-paid-content error:", err.response?.data || err.message);
-    return res.status(500).json({ ok: false, error: "failed" });
+    console.error("❌ /pwa/send-paid-content error:", err.message);
+    return res.status(500).json({ ok: false });
   }
 });
 
@@ -153,6 +146,48 @@ io.on("connection", (socket) => {
     socket.join(room);
 
     console.log("✅ INIT received:", e, s, "room=", room);
+  });
+
+  // ======================================
+  // 🔥 CLIENT → ADMIN TELEGRAM (NOUVEAU)
+  // ======================================
+  socket.on("client_message", async ({ text }) => {
+    try {
+      const email = socket.data.email;
+      const sellerSlug = socket.data.sellerSlug;
+
+      if (!email || !sellerSlug || !text) return;
+
+      // 🔎 Lookup topic_id
+      const records = await tablePWA.select({
+        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}')`
+      }).firstPage();
+
+      if (!records.length) return;
+
+      const topicId = records[0].fields.topic_id;
+
+      // 💾 log Airtable
+      await tableMessages.create({
+        email,
+        seller_slug: sellerSlug,
+        topic_id: topicId,
+        sender: "client",
+        text: text,
+      });
+
+      // 📤 send to Telegram topic
+      await axios.post(`${BOT_API_URL}/sendMessage`, {
+        chat_id: STAFF_GROUP_ID,
+        text: `💬 Client:\n${text}`,
+        message_thread_id: topicId,
+      });
+
+      console.log("📩 Client message sent to Telegram topic:", topicId);
+
+    } catch (err) {
+      console.error("client_message error:", err.message);
+    }
   });
 
   socket.on("disconnect", () => {
@@ -182,7 +217,7 @@ app.post("/webhook", async (req, res) => {
       const threadId = String(message.message_thread_id);
 
       const records = await tablePWA.select({
-        filterByFormula: `{topic_id} = "${threadId}"`,
+        filterByFormula: `{topic_id}="${threadId}"`,
       }).firstPage();
 
       if (records.length === 0) return res.sendStatus(200);
@@ -211,7 +246,7 @@ app.post("/webhook", async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("Webhook error:", error.response?.data || error.message);
+    console.error("Webhook error:", error.message);
   }
 
   res.sendStatus(200);
@@ -221,17 +256,6 @@ app.post("/webhook", async (req, res) => {
 // START SERVER
 // =======================
 const PORT = process.env.PORT || 3000;
-
-async function testTelegram() {
-  try {
-    const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
-    console.log("Telegram connected:", response.data.result.username);
-  } catch (error) {
-    console.error("Telegram connection failed:", error.message);
-  }
-}
-
-testTelegram();
 
 server.listen(PORT, () => {
   console.log(`Bridge running on port ${PORT}`);
