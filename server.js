@@ -66,10 +66,51 @@ io.on("connection", (socket) => {
     console.log("✅ INIT:", e, s, "room=", room);
   });
 
+  // 🔥 CLIENT → ADMIN TELEGRAM DIRECT
+  socket.on("client_message", async ({ text }) => {
+    try {
+      const email = socket.data.email;
+      const sellerSlug = socket.data.sellerSlug;
+
+      if (!email || !sellerSlug || !text) {
+        console.log("❌ Missing client data");
+        return;
+      }
+
+      // 🔎 Trouver le topic_id via Airtable
+      const records = await tablePWA.select({
+        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}')`
+      }).firstPage();
+
+      if (!records.length) {
+        console.log("❌ No Airtable topic match");
+        return;
+      }
+
+      const topicId = records[0].fields.topic_id;
+
+      // 🚀 ENVOI DIRECT TELEGRAM PAR LE BRIDGE
+      await axios.post(
+        `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          text: `💬 Client:\n${text}`,
+          message_thread_id: topicId,
+        }
+      );
+
+      console.log("📩 Client → Telegram topic:", topicId);
+
+    } catch (err) {
+      console.error("❌ PWA → Telegram error:", err.message);
+    }
+  });
+
   socket.on("disconnect", () => {
-    console.log("❌ PWA disconnected:", socket.id);
+    console.log("🔌 PWA disconnected:", socket.id);
   });
 });
+
 
 // ==================================================
 // CLIENT → TELEGRAM (PWA -> ADMIN)
