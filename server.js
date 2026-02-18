@@ -6,33 +6,63 @@ const cors = require("cors");
 const axios = require("axios");
 const Airtable = require("airtable");
 
-console.log("🔥 NOVAPULSE BRIDGE STABLE");
+// =======================
+// ENV (IMPORTANT)
+// =======================
+// ✅ Ton token doit être dans Render sous: BOT_TOKEN
+// (fallback si tu veux)
+const TELEGRAM_BOT_TOKEN =
+  process.env.BOT_TOKEN ||
+  process.env.BRIDGE_BOT_TOKEN ||
+  process.env.BRIDGE_TELEGRAM_TOKEN;
 
+const STAFF_GROUP_ID = process.env.STAFF_GROUP_ID; // ex: -1003418175247
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
+const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
+
+console.log("🔥 SERVER.JS BRIDGE LOADED");
+
+// =======================
+// HARD FAIL IF MISSING
+// =======================
+function assertEnv() {
+  const missing = [];
+  if (!TELEGRAM_BOT_TOKEN) missing.push("BOT_TOKEN (or BRIDGE_BOT_TOKEN)");
+  if (!STAFF_GROUP_ID) missing.push("STAFF_GROUP_ID");
+  if (!AIRTABLE_API_KEY) missing.push("AIRTABLE_API_KEY");
+  if (!AIRTABLE_BASE_ID) missing.push("AIRTABLE_BASE_ID");
+  if (!AIRTABLE_TABLE_PWA) missing.push("AIRTABLE_TABLE_PWA");
+  if (!AIRTABLE_TABLE_PWA_MESSAGES) missing.push("AIRTABLE_TABLE_PWA_MESSAGES");
+
+  if (missing.length) {
+    console.error("❌ Missing ENV:", missing.join(", "));
+  } else {
+    console.log("✅ ENV OK");
+  }
+}
+assertEnv();
+
+// =======================
+// EXPRESS / SOCKET
+// =======================
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"] }));
+app.use(express.json({ limit: "2mb" }));
 
 const io = new Server(server, {
-  cors: { origin: "*" },
+  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-app.get("/", (req, res) => res.send("Bridge OK"));
-
 // =======================
-// AIRTABLE
+// Airtable
 // =======================
-const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY })
-  .base(process.env.AIRTABLE_BASE_ID);
-
-const tablePWA = base(process.env.AIRTABLE_TABLE_PWA);
-
-// =======================
-// CONFIG TELEGRAM
-// =======================
-const STAFF_GROUP_ID = process.env.STAFF_GROUP_ID;
-const BOT_API_URL = process.env.BOT_API_URL;
+const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
+const tablePWA = base(AIRTABLE_TABLE_PWA);
+const tableMessages = base(AIRTABLE_TABLE_PWA_MESSAGES);
 
 // =======================
 // HELPERS
@@ -47,9 +77,104 @@ function pwaRoom(email, sellerSlug) {
   return `pwa:${normSlug(sellerSlug)}:${normEmail(email)}`;
 }
 
-// ==================================================
-// SOCKET.IO CONNECTION
-// ==================================================
+async function tgSendMessage({ text, message_thread_id }) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+  return axios.post(url, {
+    chat_id: STAFF_GROUP_ID,
+    text,
+    message_thread_id,
+  });
+}
+
+async function findTopicIdByEmailSlug(email, sellerSlug) {
+  const e = normEmail(email);
+  const s = normSlug(sellerSlug);
+
+  // ⚠️ topic_id est un champ texte chez toi => on compare avec des quotes
+  const records = await tablePWA
+    .select({
+      filterByFormula: `AND({email}='${e}', {seller_slug}='${s}')`,
+      maxRecords: 1,
+    })
+    .firstPage();
+
+  if (!records.length) return null;
+  const topicId = records[0].fields.topic_id;
+  return topicId ? String(topicId).trim() : null;
+}
+
+// =======================
+// ROUTES BASIC
+// =======================
+app.get("/", (req, res) => res.status(200).send("NovaPulse Bridge running 🚀"));
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+// =======================
+// TELEGRAM → PWA (admin -> client)
+// Telegram webhook points here
+// =======================
+app.post("/webhook", async (req, res) => {
+  const update = req.body;
+  if (!update || !update.message) return res.sendStatus(200);
+
+  const message = update.message;
+
+  try {
+    // Only staff supergroup topic messages
+    if (
+      message.chat?.type === "supergroup" &&
+      message.message_thread_id &&
+      !message.from?.is_bot
+    ) {
+      // ignore /env commands
+      const text = message.text?.trim() || "";
+      if (text.toLowerCase().startsWith("/env")) return res.sendStatus(200);
+
+      const threadId = String(message.message_thread_id).trim();
+
+      // find client by topic_id
+      const records = await tablePWA
+        .select({
+          filterByFormula: `{topic_id}='${threadId}'`,
+          maxRecords: 1,
+        })
+        .firstPage();
+
+      if (!records.length) return res.sendStatus(200);
+
+      const row = records[0].fields;
+      const email = normEmail(row.email);
+      const sellerSlug = normSlug(row.seller_slug);
+      const room = pwaRoom(email, sellerSlug);
+
+      if (text) {
+        await tableMessages.create({
+          email,
+          seller_slug: sellerSlug,
+          topic_id: threadId,
+          sender: "admin",
+          text,
+        });
+
+        io.to(room).emit("admin_message", {
+          text,
+          from: "admin",
+        });
+
+        console.log("📤 Admin → PWA:", room, text);
+      }
+    }
+  } catch (err) {
+    console.error("❌ /webhook error:", err.response?.data || err.message);
+  }
+
+  return res.sendStatus(200);
+});
+
+// =======================
+// SOCKET.IO (PWA ⇄ TELEGRAM)
+// =======================
 io.on("connection", (socket) => {
   console.log("🔌 PWA connected:", socket.id);
 
@@ -66,134 +191,55 @@ io.on("connection", (socket) => {
     console.log("✅ INIT:", e, s, "room=", room);
   });
 
-  // 🔥 CLIENT → ADMIN TELEGRAM DIRECT
+  // ✅ PWA → TELEGRAM (client -> staff topic) : VIA BRIDGE BOT TOKEN
   socket.on("client_message", async ({ text }) => {
     try {
       const email = socket.data.email;
       const sellerSlug = socket.data.sellerSlug;
+      const cleanText = String(text || "").trim();
 
-      if (!email || !sellerSlug || !text) {
-        console.log("❌ Missing client data");
+      if (!email || !sellerSlug || !cleanText) return;
+
+      if (!TELEGRAM_BOT_TOKEN) {
+        console.error("❌ PWA → Telegram error: BOT_TOKEN missing in ENV");
         return;
       }
 
-      // 🔎 Trouver le topic_id via Airtable
-      const records = await tablePWA.select({
-        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}')`
-      }).firstPage();
-
-      if (!records.length) {
-        console.log("❌ No Airtable topic match");
+      const topicId = await findTopicIdByEmailSlug(email, sellerSlug);
+      if (!topicId) {
+        console.error("❌ No Airtable topic for", email, sellerSlug);
         return;
       }
 
-      const topicId = records[0].fields.topic_id;
+      await tableMessages.create({
+        email,
+        seller_slug: sellerSlug,
+        topic_id: topicId,
+        sender: "client",
+        text: cleanText,
+      });
 
-      // 🚀 ENVOI DIRECT TELEGRAM PAR LE BRIDGE
-      await axios.post(
-        `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-        {
-          chat_id: STAFF_GROUP_ID,
-          text: `💬 Client:\n${text}`,
-          message_thread_id: topicId,
-        }
-      );
+      await tgSendMessage({
+        message_thread_id: Number(topicId), // Telegram expects int
+        text: `💬 Client (${email})\n${cleanText}`,
+      });
 
-      console.log("📩 Client → Telegram topic:", topicId);
-
+      console.log("📩 PWA → Telegram OK topic:", topicId);
     } catch (err) {
-      console.error("❌ PWA → Telegram error:", err.message);
+      console.error("❌ PWA → Telegram error:", err.response?.data || err.message);
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("🔌 PWA disconnected:", socket.id);
+    console.log("❌ PWA disconnected:", socket.id);
   });
 });
 
-
-// ==================================================
-// CLIENT → TELEGRAM (PWA -> ADMIN)
-// ==================================================
-app.post("/telegram/send", async (req, res) => {
-  try {
-    const { email, sellerSlug, text } = req.body;
-
-    const e = normEmail(email);
-    const s = normSlug(sellerSlug);
-
-    const records = await tablePWA.select({
-      filterByFormula: `AND({email}='${e}', {seller_slug}='${s}')`,
-    }).firstPage();
-
-    if (!records.length) {
-      return res.status(404).json({ ok: false, error: "Topic not found" });
-    }
-
-    const topicId = records[0].fields.topic_id;
-
-    await axios.post(`${BOT_API_URL}/sendMessage`, {
-      chat_id: STAFF_GROUP_ID,
-      text: `💬 Client:\n${text}`,
-      message_thread_id: topicId,
-    });
-
-    console.log("📩 Client → Telegram topic:", topicId);
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("❌ Client→Telegram:", err.message);
-    res.status(500).json({ ok: false });
-  }
-});
-
-// ==================================================
-// TELEGRAM → PWA (ADMIN -> CLIENT)
-// ==================================================
-app.post("/webhook", async (req, res) => {
-  const update = req.body;
-  if (!update.message) return res.sendStatus(200);
-
-  const message = update.message;
-
-  try {
-    if (
-      message.chat?.type === "supergroup" &&
-      message.message_thread_id &&
-      !message.from?.is_bot &&
-      message.text
-    ) {
-      const threadId = String(message.message_thread_id);
-
-      const records = await tablePWA.select({
-        filterByFormula: `{topic_id} = "${threadId}"`,
-      }).firstPage();
-
-      if (!records.length) return res.sendStatus(200);
-
-      const row = records[0].fields;
-      const email = normEmail(row.email);
-      const sellerSlug = normSlug(row.seller_slug);
-      const room = pwaRoom(email, sellerSlug);
-
-      io.to(room).emit("admin_message", {
-        text: message.text,
-        from: "admin",
-      });
-
-      console.log("📤 Admin → PWA:", room, message.text);
-    }
-  } catch (err) {
-    console.error("❌ Webhook error:", err.message);
-  }
-
-  res.sendStatus(200);
-});
-
 // =======================
-// START SERVER
+// START
 // =======================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+
 server.listen(PORT, () => {
   console.log(`🚀 Bridge running on port ${PORT}`);
 });
