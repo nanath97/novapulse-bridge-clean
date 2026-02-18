@@ -6,11 +6,8 @@ const cors = require("cors");
 const axios = require("axios");
 const Airtable = require("airtable");
 
-console.log("🔥 NOVAPULSE BRIDGE STABLE BOOT");
+console.log("🔥 NOVAPULSE BRIDGE STABLE");
 
-// =======================
-// EXPRESS INIT
-// =======================
 const app = express();
 const server = http.createServer(app);
 
@@ -21,22 +18,21 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-app.get("/", (req, res) => res.send("NovaPulse Bridge OK 🚀"));
+app.get("/", (req, res) => res.send("Bridge OK"));
 
 // =======================
 // AIRTABLE
 // =======================
-const base = new Airtable({
-  apiKey: process.env.AIRTABLE_API_KEY,
-}).base(process.env.AIRTABLE_BASE_ID);
+const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY })
+  .base(process.env.AIRTABLE_BASE_ID);
 
 const tablePWA = base(process.env.AIRTABLE_TABLE_PWA);
 
 // =======================
 // CONFIG TELEGRAM
 // =======================
-const BOT_API_URL = process.env.BOT_API_URL; // https://api.telegram.org/botXXXX
 const STAFF_GROUP_ID = process.env.STAFF_GROUP_ID;
+const BOT_API_URL = process.env.BOT_API_URL;
 
 // =======================
 // HELPERS
@@ -67,7 +63,7 @@ io.on("connection", (socket) => {
     const room = pwaRoom(e, s);
     socket.join(room);
 
-    console.log("✅ INIT:", e, s, "→", room);
+    console.log("✅ INIT:", e, s, "room=", room);
   });
 
   socket.on("disconnect", () => {
@@ -76,30 +72,21 @@ io.on("connection", (socket) => {
 });
 
 // ==================================================
-// PWA → TELEGRAM (ROUTE CRITIQUE)
+// CLIENT → TELEGRAM (PWA -> ADMIN)
 // ==================================================
 app.post("/telegram/send", async (req, res) => {
   try {
     const { email, sellerSlug, text } = req.body;
 
-    if (!email || !sellerSlug || !text) {
-      return res.status(400).json({ error: "Missing fields" });
-    }
-
     const e = normEmail(email);
     const s = normSlug(sellerSlug);
 
-    console.log("📨 PWA → TELEGRAM:", e, s, text);
-
-    const records = await tablePWA
-      .select({
-        filterByFormula: `AND({email}='${e}', {seller_slug}='${s}')`,
-      })
-      .firstPage();
+    const records = await tablePWA.select({
+      filterByFormula: `AND({email}='${e}', {seller_slug}='${s}')`,
+    }).firstPage();
 
     if (!records.length) {
-      console.log("❌ No Airtable topic match");
-      return res.status(404).json({ error: "Client not found" });
+      return res.status(404).json({ ok: false, error: "Topic not found" });
     }
 
     const topicId = records[0].fields.topic_id;
@@ -110,44 +97,62 @@ app.post("/telegram/send", async (req, res) => {
       message_thread_id: topicId,
     });
 
-    console.log("📩 Sent to Telegram topic:", topicId);
+    console.log("📩 Client → Telegram topic:", topicId);
 
-    return res.json({ ok: true });
-
+    res.json({ ok: true });
   } catch (err) {
-    console.error("❌ /telegram/send error:", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("❌ Client→Telegram:", err.message);
+    res.status(500).json({ ok: false });
   }
 });
 
 // ==================================================
-// TELEGRAM → PWA (ADMIN REPLY)
+// TELEGRAM → PWA (ADMIN -> CLIENT)
 // ==================================================
-app.post("/webhook", (req, res) => {
+app.post("/webhook", async (req, res) => {
+  const update = req.body;
+  if (!update.message) return res.sendStatus(200);
+
+  const message = update.message;
+
   try {
-    const { email, sellerSlug, text } = req.body;
+    if (
+      message.chat?.type === "supergroup" &&
+      message.message_thread_id &&
+      !message.from?.is_bot &&
+      message.text
+    ) {
+      const threadId = String(message.message_thread_id);
 
-    const room = pwaRoom(email, sellerSlug);
+      const records = await tablePWA.select({
+        filterByFormula: `{topic_id} = "${threadId}"`,
+      }).firstPage();
 
-    io.to(room).emit("admin_message", {
-      text,
-      from: "admin",
-    });
+      if (!records.length) return res.sendStatus(200);
 
-    console.log("📤 Admin → PWA:", room, text);
+      const row = records[0].fields;
+      const email = normEmail(row.email);
+      const sellerSlug = normSlug(row.seller_slug);
+      const room = pwaRoom(email, sellerSlug);
 
-    res.json({ ok: true });
+      io.to(room).emit("admin_message", {
+        text: message.text,
+        from: "admin",
+      });
+
+      console.log("📤 Admin → PWA:", room, message.text);
+    }
   } catch (err) {
-    console.error("Webhook error:", err.message);
-    res.status(500).json({ ok: false });
+    console.error("❌ Webhook error:", err.message);
   }
+
+  res.sendStatus(200);
 });
 
 // =======================
 // START SERVER
 // =======================
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, () => {
   console.log(`🚀 Bridge running on port ${PORT}`);
 });
