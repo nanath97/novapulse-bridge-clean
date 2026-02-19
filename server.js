@@ -267,9 +267,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// =======================
-// UPLOAD MEDIA → CLOUDINARY
-// =======================
+
 // =======================
 // UPLOAD MEDIA → CLOUDINARY
 // =======================
@@ -309,6 +307,49 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
   }
 });
 
+// =======================
+// PWA: SEND PAID CONTENT (BLUR + CHECKOUT)
+// =======================
+const pendingPaidContent = {}; // mémoire temporaire (phase test validée)
+
+app.post("/pwa/send-paid-content", async (req, res) => {
+  try {
+    const {
+      email,
+      sellerSlug,
+      text,
+      checkout_url,
+      mediaUrl,
+      amount,
+      isMedia,
+    } = req.body;
+
+    const room = pwaRoom(email, sellerSlug);
+
+    console.log("💰 SEND PAID CONTENT →", room);
+    console.log("Media URL:", mediaUrl);
+
+    // On stocke le vrai média en attente (phase MVP = mémoire OK)
+    pendingPaidContent[room] = {
+      mediaUrl,
+      amount,
+      createdAt: Date.now(),
+    };
+
+    // 🔒 Envoi blur + texte + bouton paiement
+    io.to(room).emit("paid_content_locked", {
+      text: text || "Contenu premium verrouillé.",
+      checkout_url,
+      amount,
+      isMedia,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /pwa/send-paid-content error:", err.message);
+    return res.status(500).json({ success: false });
+  }
+});
 
 
 // =======================
