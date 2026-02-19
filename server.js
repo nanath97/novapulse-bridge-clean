@@ -24,6 +24,25 @@ const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
 
 console.log("🔥 SERVER.JS BRIDGE LOADED");
 
+
+
+
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+
+
+
+
 // =======================
 // HARD FAIL IF MISSING
 // =======================
@@ -234,6 +253,42 @@ io.on("connection", (socket) => {
     console.log("❌ PWA disconnected:", socket.id);
   });
 });
+
+// =======================
+// UPLOAD MEDIA → CLOUDINARY
+// =======================
+app.post("/upload-media", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: "No file uploaded" });
+    }
+
+    console.log("📤 Uploading media to Cloudinary...");
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: "novapulse_media" },
+      (error, result) => {
+        if (error) {
+          console.error("❌ Cloudinary error:", error);
+          return res.status(500).json({ success: false, error: "Cloudinary upload failed" });
+        }
+
+        console.log("✅ Media uploaded:", result.secure_url);
+
+        return res.json({
+          success: true,
+          mediaUrl: result.secure_url,
+        });
+      }
+    );
+
+    streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+  } catch (err) {
+    console.error("❌ /upload-media error:", err.message);
+    return res.status(500).json({ success: false, error: "Upload failed" });
+  }
+});
+
 
 // =======================
 // START
