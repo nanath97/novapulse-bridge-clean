@@ -31,15 +31,24 @@ const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const streamifier = require("streamifier");
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const cloudinary = require("cloudinary").v2;
+
+// Si CLOUDINARY_URL est présent, on l’utilise directement
+if (process.env.CLOUDINARY_URL) {
+  cloudinary.config(process.env.CLOUDINARY_URL);
+} else {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
+
 console.log("CLOUDINARY CONFIG CHECK:", {
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key_present: !!process.env.CLOUDINARY_API_KEY,
-  api_secret_present: !!process.env.CLOUDINARY_API_SECRET
+  using_url: !!process.env.CLOUDINARY_URL,
+  cloud_name: cloudinary.config().cloud_name,
+  api_key_present: !!cloudinary.config().api_key,
+  api_secret_present: !!cloudinary.config().api_secret,
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
