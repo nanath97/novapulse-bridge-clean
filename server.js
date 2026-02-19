@@ -28,7 +28,6 @@ console.log("🔥 SERVER.JS BRIDGE LOADED");
 
 
 const multer = require("multer");
-const cloudinary = require("cloudinary").v2;
 const streamifier = require("streamifier");
 
 const cloudinary = require("cloudinary").v2;
