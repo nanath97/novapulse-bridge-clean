@@ -257,8 +257,15 @@ io.on("connection", (socket) => {
 // =======================
 // UPLOAD MEDIA → CLOUDINARY
 // =======================
+// =======================
+// UPLOAD MEDIA → CLOUDINARY
+// =======================
 app.post("/upload-media", upload.single("file"), async (req, res) => {
+  console.log("🔥 /upload-media route HIT");
+
   try {
+    console.log("REQ.FILE =", !!req.file);
+
     if (!req.file) {
       return res.status(400).json({ success: false, error: "No file uploaded" });
     }
@@ -288,6 +295,7 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     return res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
+
 
 
 // =======================
