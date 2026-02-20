@@ -407,6 +407,66 @@ app.get("/pwa/get-topic", async (req, res) => {
   }
 });
 
+// =======================
+// REGISTER NEW PWA CLIENT (CREATE TOPIC + AIRTABLE)
+// =======================
+app.post("/pwa/register-client", async (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    const sellerSlug = normSlug(req.body.sellerSlug);
+
+    if (!email || !sellerSlug) {
+      return res.status(400).json({ success: false, error: "Missing email or sellerSlug" });
+    }
+
+    console.log("🆕 REGISTER CLIENT:", email, sellerSlug);
+
+    // 1️⃣ Vérifier si le client existe déjà
+    const existing = await tablePWA
+      .select({
+        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}')`,
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (existing.length > 0) {
+      const topicId = existing[0].fields.topic_id;
+      console.log("🔁 Client already exists:", topicId);
+      return res.json({ success: true, topicId, isNew: false });
+    }
+
+    // 2️⃣ Créer un nouveau topic Telegram
+    const topicTitle = `Client ${email}`;
+
+    const tgResp = await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/createForumTopic`,
+      {
+        chat_id: STAFF_GROUP_ID,
+        name: topicTitle,
+      }
+    );
+
+    const topicId = tgResp.data.result.message_thread_id;
+    console.log("🧵 New topic created:", topicId);
+
+    // 3️⃣ Enregistrer dans Airtable
+    await tablePWA.create({
+      email,
+      seller_slug: sellerSlug,
+      topic_id: String(topicId),
+    });
+
+    console.log("💾 Airtable client created:", email);
+
+    return res.json({ success: true, topicId, isNew: true });
+  } catch (err) {
+    console.error("❌ /pwa/register-client error:", err.response?.data || err.message);
+    return res.status(500).json({ success: false });
+  }
+});
+
+
+
 
 // =======================
 // START
