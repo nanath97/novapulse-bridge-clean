@@ -351,6 +351,62 @@ app.post("/pwa/send-paid-content", async (req, res) => {
   }
 });
 
+// =======================
+// PWA: GET LAST 30 MESSAGES HISTORY
+// =======================
+app.get("/pwa/history", async (req, res) => {
+  try {
+    const email = normEmail(req.query.email);
+    const sellerSlug = normSlug(req.query.sellerSlug);
+    const topicId = String(req.query.topicId || "").trim();
+
+    if (!email || !sellerSlug || !topicId) {
+      return res.status(400).json({ success: false, error: "Missing params" });
+    }
+
+    console.log("📜 HISTORY REQUEST:", email, sellerSlug, topicId);
+
+    const records = await tableMessages
+      .select({
+        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}', {topic_id}='${topicId}')`,
+        sort: [{ field: "created_at", direction: "asc" }],
+        maxRecords: 30,
+      })
+      .firstPage();
+
+    const history = records.map((rec) => ({
+      text: rec.fields.text || "",
+      from: rec.fields.sender === "admin" ? "admin" : "client",
+      type: "text",
+    }));
+
+    return res.json({ success: true, history });
+  } catch (err) {
+    console.error("❌ /pwa/history error:", err.message);
+    return res.status(500).json({ success: false });
+  }
+});
+
+// =======================
+// GET TOPIC ID FOR PWA
+// =======================
+app.get("/pwa/get-topic", async (req, res) => {
+  try {
+    const email = normEmail(req.query.email);
+    const sellerSlug = normSlug(req.query.sellerSlug);
+
+    const topicId = await findTopicIdByEmailSlug(email, sellerSlug);
+    if (!topicId) {
+      return res.json({ topicId: null });
+    }
+
+    return res.json({ topicId });
+  } catch (err) {
+    console.error("❌ /pwa/get-topic error:", err.message);
+    return res.status(500).json({ topicId: null });
+  }
+});
+
 
 // =======================
 // START
