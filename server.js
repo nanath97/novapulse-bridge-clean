@@ -796,7 +796,28 @@ app.post("/api/pwa/note", async (req, res) => {
     return res.status(500).json({ error: "internal_error" });
   }
 });
+// =======================
+// PWA: SEND SYSTEM ADMIN MESSAGE (POST PAYMENT CONFIRMATION)
+// =======================
+app.post("/pwa/send-admin-message", async (req, res) => {
+  try {
+    const { email, sellerSlug, text } = req.body;
 
+    const room = pwaRoom(email, sellerSlug);
+
+    console.log("📩 SEND ADMIN MESSAGE →", room, text);
+
+    io.to(room).emit("admin_message", {
+      text,
+      from: "admin",
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /pwa/send-admin-message error:", err.message);
+    return res.status(500).json({ success: false });
+  }
+});
 // =======================
 // START
 // =======================
