@@ -531,6 +531,29 @@ app.post("/pwa/send-paid-content", async (req, res) => {
   }
 });
 // =======================
+// PWA: SEND SIMPLE PAYMENT (NO MEDIA)
+// =======================
+app.post("/pwa/send-simple-payment", async (req, res) => {
+  try {
+    const { email, sellerSlug, text, checkout_url, amount } = req.body;
+
+    const room = pwaRoom(email, sellerSlug);
+
+    console.log("💳 SEND SIMPLE PAYMENT →", room);
+
+    io.to(room).emit("simple_payment_request", {
+      text: text || "💳 Paiement requis.",
+      checkout_url,
+      amount,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /pwa/send-simple-payment error:", err.message);
+    return res.status(500).json({ success: false });
+  }
+});
+// =======================
 // PWA: UNLOCK AFTER PAYMENT (called by Python webhook)
 // =======================
 // =======================
