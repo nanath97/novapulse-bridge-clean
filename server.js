@@ -530,7 +530,38 @@ app.post("/pwa/send-paid-content", async (req, res) => {
     return res.status(500).json({ success: false });
   }
 });
+// =======================
+// PWA: UNLOCK AFTER PAYMENT (called by Python webhook)
+// =======================
+app.post("/pwa/unlock", async (req, res) => {
+  try {
+    const { email, sellerSlug, contentId, sessionId } = req.body || {};
+    const room = pwaRoom(email, sellerSlug);
 
+    // Vérifie qu'on a bien quelque chose en mémoire (phase MVP)
+    const pending = pendingPaidContent[room];
+
+    console.log("🔓 UNLOCK REQUEST:", { room, contentId, sessionId, hasPending: !!pending });
+
+    if (!pending || !pending.mediaUrl) {
+      return res.status(404).json({ success: false, error: "no_pending_content" });
+    }
+
+    io.to(room).emit("paid_content_unlocked", {
+      contentId,
+      mediaUrl: pending.mediaUrl,
+      sessionId,
+    });
+
+    // Optionnel: purge pour éviter double unlock
+    delete pendingPaidContent[room];
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /pwa/unlock error:", err.message);
+    return res.status(500).json({ success: false });
+  }
+});
 // =======================
 // PWA: GET LAST 30 MESSAGES HISTORY
 // =======================
