@@ -533,27 +533,39 @@ app.post("/pwa/send-paid-content", async (req, res) => {
 // =======================
 // PWA: UNLOCK AFTER PAYMENT (called by Python webhook)
 // =======================
+// =======================
+// PWA: UNLOCK CONTENT AFTER PAYMENT
+// =======================
 app.post("/pwa/unlock", async (req, res) => {
   try {
-    const { email, sellerSlug, contentId, sessionId } = req.body || {};
+    const { email, sellerSlug, contentId, sessionId } = req.body;
+
     const room = pwaRoom(email, sellerSlug);
 
-    // Vérifie qu'on a bien quelque chose en mémoire (phase MVP)
-    const pending = pendingPaidContent[room];
-
-    console.log("🔓 UNLOCK REQUEST:", { room, contentId, sessionId, hasPending: !!pending });
-
-    if (!pending || !pending.mediaUrl) {
-      return res.status(404).json({ success: false, error: "no_pending_content" });
-    }
-
-    io.to(room).emit("paid_content_unlocked", {
+    console.log("🔓 UNLOCK REQUEST:", {
+      email,
+      sellerSlug,
       contentId,
-      mediaUrl: pending.mediaUrl,
       sessionId,
+      room,
     });
 
-    // Optionnel: purge pour éviter double unlock
+    const pending = pendingPaidContent[room];
+
+    if (!pending) {
+      console.warn("⚠️ No pending content found for room:", room);
+      return res.json({ success: false, reason: "no_pending_content" });
+    }
+
+    console.log("📦 Unlocking media:", pending.mediaUrl);
+
+    io.to(room).emit("paid_content_unlocked", {
+      mediaUrl: pending.mediaUrl,
+      amount: pending.amount,
+      contentId,
+    });
+
+    // nettoyage mémoire
     delete pendingPaidContent[room];
 
     return res.json({ success: true });
