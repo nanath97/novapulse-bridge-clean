@@ -607,6 +607,7 @@ app.post("/pwa/register-client", async (req, res) => {
 
     const topicTitle = `Client ${email}`;
 
+    // 1️⃣ Création du topic Telegram
     const tgResp = await axios.post(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/createForumTopic`,
       {
@@ -618,7 +619,8 @@ app.post("/pwa/register-client", async (req, res) => {
     const topicId = tgResp.data.result.message_thread_id;
     console.log("🧵 New topic created:", topicId);
 
-    await tablePWA.create({
+    // 2️⃣ Création de la ligne Airtable
+    const createdRecord = await tablePWA.create({
       email,
       seller_slug: sellerSlug,
       topic_id: String(topicId),
@@ -626,14 +628,19 @@ app.post("/pwa/register-client", async (req, res) => {
 
     console.log("💾 Airtable client created:", email);
 
-    // 🔔 Panel message dans le topic
+    // 3️⃣ Envoi du panel Telegram + récupération message_id
     try {
-      await axios.post(
+      const panelResp = await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
         {
           chat_id: STAFF_GROUP_ID,
           message_thread_id: Number(topicId),
-          text: `🧐 PANEL DE CONTRÔLE PWA\n\n📧 Email : ${email}\n🏷️ Seller : ${sellerSlug}\n📒 Notes : \n👤 Admin en charge : Aucun`,
+          text: `🧐 PANEL DE CONTRÔLE PWA
+
+📧 Email : ${email}
+🏷️ Seller : ${sellerSlug}
+📒 Notes :
+👤 Admin en charge : Aucun`,
           reply_markup: {
             inline_keyboard: [
               [
@@ -646,7 +653,17 @@ app.post("/pwa/register-client", async (req, res) => {
           },
         }
       );
-      console.log("🔔 Panel trigger message sent to topic:", topicId);
+
+      // 🔥 CRUCIAL : récupérer le message_id du panel
+      const panelMessageId = panelResp.data.result.message_id;
+      console.log("📌 Panel message_id:", panelMessageId);
+
+      // 🔥 On l’enregistre dans Airtable pour pouvoir l’éditer plus tard
+      await tablePWA.update(createdRecord.id, {
+        panel_message_id: String(panelMessageId),
+      });
+
+      console.log("💾 panel_message_id saved in Airtable");
     } catch (notifyErr) {
       console.error(
         "⚠️ Failed to send panel trigger message:",
