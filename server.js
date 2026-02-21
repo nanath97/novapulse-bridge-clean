@@ -287,16 +287,10 @@ app.post("/webhook", async (req, res) => {
           admin_note: merged,
         });
 
-        // Panel refresh (simple)
+        // Confirmation simple (PAS de renvoi du panel)
         await tgSendMessage({
           message_thread_id: Number(threadId),
-          text:
-            "🧐 PANEL DE CONTRÔLE PWA\n\n" +
-            `📒 Notes :\n${merged}\n\n` +
-            "✅ Note enregistrée.",
-          reply_markup: {
-            inline_keyboard: [[{ text: "📝 Ajouter une note", callback_data: `annoter_pwa_${threadId}` }]],
-          },
+          text: "✅ Note enregistrée",
         });
 
         console.log("✅ PWA note saved topic:", threadId);
