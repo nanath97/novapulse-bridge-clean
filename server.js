@@ -367,18 +367,21 @@ app.get("/pwa/history", async (req, res) => {
     console.log("📜 HISTORY REQUEST:", email, sellerSlug, topicId);
 
     const records = await tableMessages
-      .select({
-        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}', {topic_id}='${topicId}')`,
-        sort: [{ field: "created_at", direction: "asc" }],
-        maxRecords: 30,
-      })
-      .firstPage();
+  .select({
+    filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}', {topic_id}='${topicId}')`,
+    sort: [{ field: "created_at", direction: "desc" }], // 🔴 plus récents d'abord
+    maxRecords: 30,
+  })
+  .firstPage();
 
-    const history = records.map((rec) => ({
-      text: rec.fields.text || "",
-      from: rec.fields.sender === "admin" ? "admin" : "client",
-      type: "text",
-    }));
+// 🔁 On inverse pour afficher du plus ancien → plus récent
+    const history = records
+  .reverse()
+  .map((rec) => ({
+    text: rec.fields.text || "",
+    from: rec.fields.sender === "admin" ? "admin" : "client",
+    type: "text",
+  }));
 
     return res.json({ success: true, history });
   } catch (err) {
@@ -458,13 +461,24 @@ app.post("/pwa/register-client", async (req, res) => {
 
     console.log("💾 Airtable client created:", email);
 
+    // 4️⃣ 🔔 Notification dans le topic pour déclencher le panel Python
+    try {
+      await tgSendMessage({
+        message_thread_id: Number(topicId),
+        text: `🆕 Nouveau client PWA\n\n📧 Email : ${email}\n🏷️ Seller : ${sellerSlug}`,
+      });
+      console.log("🔔 Panel trigger message sent to topic:", topicId);
+    } catch (notifyErr) {
+      console.error("⚠️ Failed to send panel trigger message:", notifyErr.response?.data || notifyErr.message);
+      // On ne bloque pas le flux si Telegram échoue
+    }
+
     return res.json({ success: true, topicId, isNew: true });
   } catch (err) {
     console.error("❌ /pwa/register-client error:", err.response?.data || err.message);
     return res.status(500).json({ success: false });
   }
 });
-
 
 
 
