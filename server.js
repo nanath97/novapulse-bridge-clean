@@ -481,6 +481,70 @@ app.post("/pwa/register-client", async (req, res) => {
 });
 
 
+// =======================
+// NOTES (PWA Clients)
+// =======================
+
+// GET note for a topic
+app.get("/api/pwa/note", async (req, res) => {
+  try {
+    const { seller_slug, topic_id } = req.query;
+    if (!seller_slug || !topic_id) {
+      return res.status(400).json({ error: "seller_slug and topic_id required" });
+    }
+
+    const record = await findPwaClientRecord({ seller_slug, topic_id: String(topic_id) });
+    if (!record) return res.json({ note: "" });
+
+    return res.json({ note: record.fields?.admin_note || "" });
+  } catch (err) {
+    console.error("GET /api/pwa/note error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// POST update note for a topic
+app.post("/api/pwa/note", async (req, res) => {
+  try {
+    const { seller_slug, topic_id, note } = req.body || {};
+    if (!seller_slug || !topic_id) {
+      return res.status(400).json({ error: "seller_slug and topic_id required" });
+    }
+
+    const record = await findPwaClientRecord({ seller_slug, topic_id: String(topic_id) });
+    if (!record) {
+      // On ne crée PAS une nouvelle ligne ici (sinon tu vas créer des clients fantômes)
+      return res.status(404).json({ error: "client_topic_not_found" });
+    }
+
+    await base("PWA Clients").update(record.id, {
+      admin_note: note || "",
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /api/pwa/note error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// -------- helpers --------
+async function findPwaClientRecord({ seller_slug, topic_id }) {
+  const formula = `AND({seller_slug}="${escapeAirtableString(
+    seller_slug
+  )}",{topic_id}="${escapeAirtableString(topic_id)}")`;
+
+  const records = await base("PWA Clients")
+    .select({ filterByFormula: formula, maxRecords: 1 })
+    .firstPage();
+
+  return records[0] || null;
+}
+
+function escapeAirtableString(str) {
+  return String(str).replace(/"/g, '\\"');
+}
+
 
 // =======================
 // START
