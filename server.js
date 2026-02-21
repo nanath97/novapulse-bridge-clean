@@ -283,11 +283,52 @@ app.post("/webhook", async (req, res) => {
         const oldNote = record.fields?.admin_note || "";
         const merged = appendNote(oldNote, text);
 
+        // Mise à jour persistante dans Airtable
         await base("PWA Clients").update(record.id, {
           admin_note: merged,
         });
 
-        // Confirmation simple (PAS de renvoi du panel)
+        // 🔥 UPDATE DU PANEL EXISTANT (sans duplication)
+        const panelMessageId = record.fields?.panel_message_id;
+
+        if (panelMessageId) {
+          try {
+            await axios.post(
+              `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`,
+              {
+                chat_id: STAFF_GROUP_ID,
+                message_id: Number(panelMessageId),
+                text:
+                  "🧐 PANEL DE CONTRÔLE PWA\n\n" +
+                  `📧 Email : ${record.fields.email || "—"}\n` +
+                  `🏷️ Seller : ${record.fields.seller_slug || "—"}\n\n` +
+                  `📒 Notes :\n${merged || "Aucune note"}\n\n` +
+                  "👤 Admin en charge : Aucun",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: "📝 Ajouter une note",
+                        callback_data: `annoter_pwa_${threadId}`,
+                      },
+                    ],
+                  ],
+                },
+              }
+            );
+
+            console.log("🧠 Panel updated for topic:", threadId);
+          } catch (e) {
+            console.error(
+              "❌ Failed to edit panel:",
+              e.response?.data || e.message
+            );
+          }
+        } else {
+          console.warn("⚠️ panel_message_id manquant pour topic:", threadId);
+        }
+
+        // Confirmation simple (sans renvoyer le panel)
         await tgSendMessage({
           message_thread_id: Number(threadId),
           text: "✅ Note enregistrée",
@@ -338,7 +379,6 @@ app.post("/webhook", async (req, res) => {
 
   return res.sendStatus(200);
 });
-
 // =======================
 // SOCKET.IO (PWA ⇄ TELEGRAM)
 // =======================
