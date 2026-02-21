@@ -463,10 +463,19 @@ app.post("/pwa/register-client", async (req, res) => {
 
     // 4️⃣ 🔔 Notification dans le topic pour déclencher le panel Python
     try {
-      await tgSendMessage({
-        message_thread_id: Number(topicId),
-        text: `🆕 Nouveau client PWA\n\n📧 Email : ${email}\n🏷️ Seller : ${sellerSlug}`,
-      });
+      await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  chat_id: STAFF_GROUP_ID,
+  message_thread_id: Number(topicId),
+  text: `🧐 PANEL DE CONTRÔLE PWA\n\n📧 Email : ${email}\n🏷️ Seller : ${sellerSlug}\n📒 Notes : \n👤 Admin en charge : Aucun`,
+  reply_markup: {
+    inline_keyboard: [
+      [
+        { text: "✅ Prendre en charge", callback_data: `prendre_pwa_${topicId}` },
+        { text: "📝 Ajouter une note", callback_data: `annoter_pwa_${topicId}` }
+      ]
+    ]
+  }
+});
       console.log("🔔 Panel trigger message sent to topic:", topicId);
     } catch (notifyErr) {
       console.error("⚠️ Failed to send panel trigger message:", notifyErr.response?.data || notifyErr.message);
