@@ -174,6 +174,19 @@ function appendNote(oldNote, newNote) {
 // =======================
 app.get("/", (req, res) => res.status(200).send("NovaPulse Bridge running 🚀"));
 app.get("/health", (req, res) => res.json({ ok: true }));
+// =======================
+// STRIPE REDIRECT MVP (SUCCESS / CANCEL)
+// =======================
+app.get("/success", (req, res) => {
+  const sessionId = req.query.session_id || "";
+  res
+    .status(200)
+    .send(`✅ Paiement réussi. Tu peux fermer cette page. session_id=${sessionId}`);
+});
+
+app.get("/cancel", (req, res) => {
+  res.status(200).send("❌ Paiement annulé. Tu peux fermer cette page et réessayer.");
+});
 
 // =======================
 // TELEGRAM → PWA (admin -> client) + CALLBACKS
