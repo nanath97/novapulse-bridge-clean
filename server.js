@@ -386,10 +386,11 @@ if (
   // D) admin -> PWA media (photo, video, document)
   // PHOTO
   if (message.photo && message.photo.length > 0) {
-  if (isPaywallCommand) {
-    console.log("⛔ PHOTO ignorée (paywall géré par Python)");
-    return res.sendStatus(200);
-  }
+    if (isPaywallCommand) {
+      console.log("⛔ PHOTO ignorée (paywall géré par Python)");
+      return res.sendStatus(200);
+    }
+
     const fileId = message.photo[message.photo.length - 1].file_id;
 
     const fileResp = await axios.get(
@@ -400,21 +401,30 @@ if (
     if (filePath) {
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
+      // 🔥 1) ENVOI DU CAPTION SI EXISTE
+      if (message.caption) {
+        io.to(room).emit("admin_message", {
+          text: message.caption,
+          from: "admin",
+        });
+      }
+
+      // 🔥 2) ENVOI DE LA PHOTO
       io.to(room).emit("admin_media", {
         type: "photo",
         url: fileUrl,
       });
 
-      console.log("📸 Admin PHOTO → PWA:", room);
+      console.log("📸 Admin PHOTO + caption → PWA:", room);
     }
   }
 
-  // VIDEO
-  if (message.video) {
-  if (isPaywallCommand) {
-    console.log("⛔ VIDEO ignorée (paywall géré par Python)");
-    return res.sendStatus(200);
-  }
+    if (message.video) {
+    if (isPaywallCommand) {
+      console.log("⛔ VIDEO ignorée (paywall géré par Python)");
+      return res.sendStatus(200);
+    }
+
     const fileId = message.video.file_id;
 
     const fileResp = await axios.get(
@@ -425,21 +435,28 @@ if (
     if (filePath) {
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
+      if (message.caption) {
+        io.to(room).emit("admin_message", {
+          text: message.caption,
+          from: "admin",
+        });
+      }
+
       io.to(room).emit("admin_media", {
         type: "video",
         url: fileUrl,
       });
 
-      console.log("🎥 Admin VIDEO → PWA:", room);
+      console.log("🎥 Admin VIDEO + caption → PWA:", room);
     }
   }
 
-  // DOCUMENT (PDF, devis, facture…)
-  if (message.document) {
-  if (isPaywallCommand) {
-    console.log("⛔ DOCUMENT ignoré (paywall géré par Python)");
-    return res.sendStatus(200);
-  }
+    if (message.document) {
+    if (isPaywallCommand) {
+      console.log("⛔ DOCUMENT ignoré (paywall géré par Python)");
+      return res.sendStatus(200);
+    }
+
     const fileId = message.document.file_id;
     const fileName = message.document.file_name || "document";
 
@@ -451,13 +468,20 @@ if (
     if (filePath) {
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
+      if (message.caption) {
+        io.to(room).emit("admin_message", {
+          text: message.caption,
+          from: "admin",
+        });
+      }
+
       io.to(room).emit("admin_media", {
         type: "document",
         url: fileUrl,
         fileName,
       });
 
-      console.log("📄 Admin DOCUMENT → PWA:", room, fileName);
+      console.log("📄 Admin DOCUMENT + caption → PWA:", room);
     }
   }
 } // ← ferme le if(supergroup topic)
