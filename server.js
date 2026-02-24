@@ -383,7 +383,20 @@ app.post("/webhook", async (req, res) => {
       // =========================
       // D) admin -> PWA MEDIA normal (photo / video / document)
       // =========================
+      // =========================
+      // D) admin -> PWA MEDIA normal (photo / video / document)
+      // =========================
       if (message.photo || message.video || message.document) {
+        const uniqueMediaKey = `${threadId}_${message.message_id}`;
+
+        // 🔒 Idempotence : ignore si déjà traité
+        if (processedMediaMessages.has(uniqueMediaKey)) {
+          console.log("⏭️ Duplicate media ignored:", uniqueMediaKey);
+          return res.sendStatus(200);
+        }
+
+        processedMediaMessages.add(uniqueMediaKey);
+
         try {
           let fileId = null;
           let mediaType = "photo";
