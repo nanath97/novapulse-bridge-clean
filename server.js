@@ -8,6 +8,8 @@ const Airtable = require("airtable");
 
 console.log("🔥 SERVER.JS BRIDGE LOADED");
 
+
+// LOG RENDER//
 // =======================
 // ENV (IMPORTANT)
 // =======================
