@@ -393,52 +393,26 @@ app.post("/webhook", async (req, res) => {
   return res.sendStatus(200);
 });
 
-// =========================
-// D) MEDIA NORMAL (photo / video / document)
-// =========================
-const hasMedia =
-  message.photo ||
-  message.video ||
-  message.document;
+// D) admin -> PWA MEDIA normal (photo / video / document)
+if (message.photo || message.video || message.document) {
+  let fileId = null;
+  let mediaType = "photo";
 
-if (hasMedia) {
+  if (message.photo) {
+    fileId = message.photo[message.photo.length - 1].file_id;
+    mediaType = "photo";
+  } else if (message.video) {
+    fileId = message.video.file_id;
+    mediaType = "video";
+  } else if (message.document) {
+    fileId = message.document.file_id;
+    mediaType = "document";
+  }
+
+  if (!fileId) return res.sendStatus(200);
+
   try {
-    const mediaGroupId = message.media_group_id
-      ? String(message.media_group_id)
-      : null;
-
-    const records = await tablePWA
-      .select({
-        filterByFormula: `{topic_id}='${threadId}'`,
-        maxRecords: 1,
-      })
-      .firstPage();
-
-    if (!records.length) return res.sendStatus(200);
-
-    const row = records[0].fields;
-    const email = normEmail(row.email);
-    const sellerSlug = normSlug(row.seller_slug);
-    const room = pwaRoom(email, sellerSlug);
-
-    // -------- TELEGRAM FILE ID --------
-    let fileId = null;
-    let mediaType = "photo";
-
-    if (message.photo) {
-      fileId = message.photo[message.photo.length - 1].file_id;
-      mediaType = "photo";
-    } else if (message.video) {
-      fileId = message.video.file_id;
-      mediaType = "video";
-    } else if (message.document) {
-      fileId = message.document.file_id;
-      mediaType = "document";
-    }
-
-    if (!fileId) return res.sendStatus(200);
-
-    // -------- GET FILE PATH FROM TELEGRAM --------
+    // 1) récupérer fichier Telegram
     const fileResp = await axios.get(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
     );
@@ -446,12 +420,12 @@ if (hasMedia) {
     const filePath = fileResp.data.result.file_path;
     const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
-    // -------- DOWNLOAD FILE BUFFER --------
+    // 2) télécharger le fichier
     const fileDownload = await axios.get(fileUrl, {
       responseType: "arraybuffer",
     });
 
-    // -------- UPLOAD TO CLOUDINARY --------
+    // 3) upload Cloudinary
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: "novapulse_media" },
@@ -466,49 +440,20 @@ if (hasMedia) {
 
     const mediaUrl = uploadResult.secure_url;
 
-    console.log("📸 MEDIA UPLOADED:", mediaUrl);
+    // 4) envoyer à la PWA
+    io.to(room).emit("MEDIA_MESSAGE", {
+      url: mediaUrl,
+      kind: mediaType,
+      caption: message.caption || "",
+    });
 
-    // -------- HANDLE GALLERY (media_group_id) --------
-    if (mediaGroupId) {
-      if (!global.mediaAlbums) global.mediaAlbums = {};
-
-      if (!global.mediaAlbums[mediaGroupId]) {
-        global.mediaAlbums[mediaGroupId] = [];
-        setTimeout(() => {
-          const album = global.mediaAlbums[mediaGroupId] || [];
-          delete global.mediaAlbums[mediaGroupId];
-
-          io.to(room).emit("MEDIA_GALLERY", {
-            media: album,
-            caption: message.caption || "",
-          });
-
-          console.log("🖼️ MEDIA GALLERY SENT:", album.length);
-        }, 1200); // délai pour regrouper l'album
-      }
-
-      global.mediaAlbums[mediaGroupId].push({
-        url: mediaUrl,
-        kind: mediaType,
-      });
-
-    } else {
-      // -------- SINGLE MEDIA --------
-      io.to(room).emit("MEDIA_MESSAGE", {
-        url: mediaUrl,
-        kind: mediaType,
-        caption: message.caption || "",
-      });
-
-      console.log("📤 MEDIA MESSAGE SENT:", mediaType);
-    }
-
+    console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
   } catch (err) {
     console.error("❌ MEDIA NORMAL ERROR:", err.message);
   }
-
-  return res.sendStatus(200);
 }
+
+
 // =======================
 // SOCKET.IO (PWA ⇄ TELEGRAM)
 // =======================
