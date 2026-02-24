@@ -385,24 +385,28 @@ app.post("/webhook", async (req, res) => {
         console.log("📤 Admin → PWA:", room, text);
       }
 
-            // D) admin -> PWA MEDIA universel (photo / video / document)
+                  // D) admin -> PWA MEDIA normal (photo / video / document)
       if (message.photo || message.video || message.document) {
         let fileId = null;
         let mediaType = "photo";
+        let originalName = "file";
         let resourceType = "image"; // défaut
 
         if (message.photo) {
           fileId = message.photo[message.photo.length - 1].file_id;
           mediaType = "photo";
+          originalName = "image.jpg";
           resourceType = "image";
         } else if (message.video) {
           fileId = message.video.file_id;
           mediaType = "video";
+          originalName = message.video.file_name || "video.mp4";
           resourceType = "video";
         } else if (message.document) {
           fileId = message.document.file_id;
           mediaType = "document";
-          resourceType = "raw"; // 🔥 IMPORTANT pour PDF/DOC
+          originalName = message.document.file_name || "document";
+          resourceType = "raw"; // CRUCIAL pour PDF/DOC/etc
         }
 
         if (!fileId) return res.sendStatus(200);
@@ -421,12 +425,15 @@ app.post("/webhook", async (req, res) => {
             responseType: "arraybuffer",
           });
 
-          // 3) upload Cloudinary avec type adapté
+          // 3) upload Cloudinary avec type correct + nom original
           const uploadResult = await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
               {
                 folder: "novapulse_media",
-                resource_type: resourceType, // 🔥 clé universelle
+                resource_type: resourceType,
+                public_id: originalName.replace(/\.[^/.]+$/, ""), // sans extension
+                use_filename: true,
+                unique_filename: true,
               },
               (error, result) => {
                 if (error) return reject(error);
@@ -444,11 +451,12 @@ app.post("/webhook", async (req, res) => {
             url: mediaUrl,
             kind: mediaType,
             caption: message.caption || "",
+            fileName: originalName,
           });
 
           console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
         } catch (err) {
-          console.error("❌ MEDIA UNIVERSAL ERROR:", err.message);
+          console.error("❌ MEDIA NORMAL ERROR:", err.message);
         }
       }
 
