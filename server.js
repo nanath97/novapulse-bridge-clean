@@ -385,7 +385,7 @@ app.post("/webhook", async (req, res) => {
         console.log("📤 Admin → PWA:", room, text);
       }
 
-                  // D) admin -> PWA MEDIA normal (photo / video / document)
+          // D) admin -> PWA MEDIA normal (photo / video / document)
       if (message.photo || message.video || message.document) {
         let fileId = null;
         let mediaType = "photo";
@@ -431,8 +431,8 @@ app.post("/webhook", async (req, res) => {
               {
                 folder: "novapulse_media",
                 resource_type: resourceType,
-                public_id: originalName.replace(/\.[^/.]+$/, ""), // sans extension
-                use_filename: true,
+                public_id: safePublicId, // sans extension
+                use_filename: false,
                 unique_filename: true,
               },
               (error, result) => {
