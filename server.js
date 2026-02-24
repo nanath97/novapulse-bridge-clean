@@ -393,65 +393,65 @@ app.post("/webhook", async (req, res) => {
   return res.sendStatus(200);
 });
 
-// D) admin -> PWA MEDIA normal (photo / video / document)
-if (message.photo || message.video || message.document) {
-  let fileId = null;
-  let mediaType = "photo";
+      // D) admin -> PWA MEDIA normal (photo / video / document)
+      if (message.photo || message.video || message.document) {
+        let fileId = null;
+        let mediaType = "photo";
 
-  if (message.photo) {
-    fileId = message.photo[message.photo.length - 1].file_id;
-    mediaType = "photo";
-  } else if (message.video) {
-    fileId = message.video.file_id;
-    mediaType = "video";
-  } else if (message.document) {
-    fileId = message.document.file_id;
-    mediaType = "document";
-  }
-
-  if (!fileId) return res.sendStatus(200);
-
-  try {
-    // 1) récupérer fichier Telegram
-    const fileResp = await axios.get(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
-    );
-
-    const filePath = fileResp.data.result.file_path;
-    const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
-
-    // 2) télécharger le fichier
-    const fileDownload = await axios.get(fileUrl, {
-      responseType: "arraybuffer",
-    });
-
-    // 3) upload Cloudinary
-    const uploadResult = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { folder: "novapulse_media" },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
+        if (message.photo) {
+          fileId = message.photo[message.photo.length - 1].file_id;
+          mediaType = "photo";
+        } else if (message.video) {
+          fileId = message.video.file_id;
+          mediaType = "video";
+        } else if (message.document) {
+          fileId = message.document.file_id;
+          mediaType = "document";
         }
-      );
 
-      streamifier.createReadStream(fileDownload.data).pipe(stream);
-    });
+        if (!fileId) return res.sendStatus(200);
 
-    const mediaUrl = uploadResult.secure_url;
+        try {
+          // 1) récupérer fichier Telegram
+          const fileResp = await axios.get(
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+          );
 
-    // 4) envoyer à la PWA
-    io.to(room).emit("MEDIA_MESSAGE", {
-      url: mediaUrl,
-      kind: mediaType,
-      caption: message.caption || "",
-    });
+          const filePath = fileResp.data.result.file_path;
+          const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
-    console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
-  } catch (err) {
-    console.error("❌ MEDIA NORMAL ERROR:", err.message);
-  }
-}
+          // 2) télécharger le fichier
+          const fileDownload = await axios.get(fileUrl, {
+            responseType: "arraybuffer",
+          });
+
+          // 3) upload Cloudinary
+          const uploadResult = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { folder: "novapulse_media" },
+              (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+              }
+            );
+
+            streamifier.createReadStream(fileDownload.data).pipe(stream);
+          });
+
+          const mediaUrl = uploadResult.secure_url;
+
+          // 4) envoyer à la PWA
+          io.to(room).emit("MEDIA_MESSAGE", {
+            url: mediaUrl,
+            kind: mediaType,
+            caption: message.caption || "",
+          });
+
+          console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
+        } catch (err) {
+          console.error("❌ MEDIA NORMAL ERROR:", err.message);
+        }
+      }
 
 
 // =======================
