@@ -295,12 +295,10 @@ app.post("/webhook", async (req, res) => {
         const oldNote = record.fields?.admin_note || "";
         const merged = appendNote(oldNote, text);
 
-        // Mise à jour persistante dans Airtable
         await base("PWA Clients").update(record.id, {
           admin_note: merged,
         });
 
-        // 🔥 UPDATE DU PANEL EXISTANT (sans duplication)
         const panelMessageId = record.fields?.panel_message_id;
 
         if (panelMessageId) {
@@ -328,13 +326,9 @@ app.post("/webhook", async (req, res) => {
                 },
               }
             );
-
-            console.log("🧠 Panel updated for topic:", threadId);
           } catch (e) {
             console.error("❌ Failed to edit panel:", e.response?.data || e.message);
           }
-        } else {
-          console.warn("⚠️ panel_message_id manquant pour topic:", threadId);
         }
 
         await tgSendMessage({
@@ -342,14 +336,15 @@ app.post("/webhook", async (req, res) => {
           text: "✅ Note enregistrée",
         });
 
-        console.log("✅ PWA note saved topic:", threadId);
         return res.sendStatus(200);
       }
 
       // =========================
-      // B) ignore /env commands (pour ne pas polluer la PWA)
+      // B) ignore /env commands
       // =========================
-      if (text.toLowerCase().startsWith("/env")) return res.sendStatus(200);
+      if (text.toLowerCase().startsWith("/env")) {
+        return res.sendStatus(200);
+      }
 
       // =========================
       // C) admin -> PWA message normal + calcul room
@@ -385,34 +380,32 @@ app.post("/webhook", async (req, res) => {
         console.log("📤 Admin → PWA:", room, text);
       }
 
-          // D) admin -> PWA MEDIA normal (photo / video / document)
+      // =========================
+      // D) admin -> PWA MEDIA normal (photo / video / document)
+      // =========================
       if (message.photo || message.video || message.document) {
-        let fileId = null;
-        let mediaType = "photo";
-        let originalName = "file";
-        let resourceType = "image"; // défaut
-
-        if (message.photo) {
-          fileId = message.photo[message.photo.length - 1].file_id;
-          mediaType = "photo";
-          originalName = "image.jpg";
-          resourceType = "image";
-        } else if (message.video) {
-          fileId = message.video.file_id;
-          mediaType = "video";
-          originalName = message.video.file_name || "video.mp4";
-          resourceType = "video";
-        } else if (message.document) {
-          fileId = message.document.file_id;
-          mediaType = "document";
-          originalName = message.document.file_name || "document";
-          resourceType = "raw"; // CRUCIAL pour PDF/DOC/etc
-        }
-
-        if (!fileId) return res.sendStatus(200);
-
         try {
-          // 1) récupérer fichier Telegram
+          let fileId = null;
+          let mediaType = "photo";
+          let originalFileName = "file";
+
+          if (message.photo) {
+            fileId = message.photo[message.photo.length - 1].file_id;
+            mediaType = "photo";
+            originalFileName = "image.jpg";
+          } else if (message.video) {
+            fileId = message.video.file_id;
+            mediaType = "video";
+            originalFileName = message.video.file_name || "video.mp4";
+          } else if (message.document) {
+            fileId = message.document.file_id;
+            mediaType = "document";
+            originalFileName = message.document.file_name || "document.pdf";
+          }
+
+          if (!fileId) return res.sendStatus(200);
+
+          // 1) récupérer le fichier Telegram
           const fileResp = await axios.get(
             `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
           );
@@ -425,15 +418,20 @@ app.post("/webhook", async (req, res) => {
             responseType: "arraybuffer",
           });
 
-          // 3) upload Cloudinary avec type correct + nom original
+          // 3) nom propre sans espaces
+          const safeFileName = originalFileName.replace(/\s+/g, "_");
+
+          // 4) upload Cloudinary typé correctement
           const uploadResult = await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
               {
                 folder: "novapulse_media",
-                resource_type: resourceType,
-                public_id: safePublicId, // sans extension
-                use_filename: false,
-                unique_filename: true,
+                resource_type:
+                  mediaType === "document"
+                    ? "raw"
+                    : mediaType === "video"
+                    ? "video"
+                    : "image",
               },
               (error, result) => {
                 if (error) return reject(error);
@@ -446,12 +444,12 @@ app.post("/webhook", async (req, res) => {
 
           const mediaUrl = uploadResult.secure_url;
 
-          // 4) envoyer à la PWA
+          // 5) envoyer à la PWA
           io.to(room).emit("MEDIA_MESSAGE", {
             url: mediaUrl,
             kind: mediaType,
             caption: message.caption || "",
-            fileName: originalName,
+            fileName: safeFileName,
           });
 
           console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
@@ -459,14 +457,13 @@ app.post("/webhook", async (req, res) => {
           console.error("❌ MEDIA NORMAL ERROR:", err.message);
         }
       }
-
-      return res.sendStatus(200);
     }
-  } catch (err) {
-    console.error("❌ /webhook error:", err.response?.data || err.message);
-  }
 
-  return res.sendStatus(200);
+    return res.sendStatus(200);
+    } catch (err) {
+    console.error("❌ /webhook error:", err.response?.data || err.message);
+    return res.sendStatus(200);
+  }
 });
 
 
