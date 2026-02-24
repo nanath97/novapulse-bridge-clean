@@ -21,16 +21,6 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
 const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
-// =======================
-// IDPOTENCE MEDIA (anti-duplicate Telegram updates)
-// =======================
-const processedMediaMessages = new Set();
-
-// Optionnel mais recommandé : purge automatique pour éviter que le Set grossisse à l’infini
-setInterval(() => {
-  processedMediaMessages.clear();
-  console.log("🧹 processedMediaMessages cleared");
-}, 6 * 60 * 60 * 1000); // toutes les 6 heures
 
 const multer = require("multer");
 const streamifier = require("streamifier");
@@ -227,6 +217,7 @@ app.post("/webhook", async (req, res) => {
 
       // ✅ On ne gère ici QUE les callbacks PWA
       if (data.startsWith("annoter_pwa_") && threadId) {
+        // On récupère le client (seller_slug) via topic_id pour être cohérent
         const records = await tablePWA
           .select({
             filterByFormula: `{topic_id}='${threadId}'`,
@@ -274,10 +265,9 @@ app.post("/webhook", async (req, res) => {
       const text = (message.text || "").trim();
       const threadId = String(message.message_thread_id).trim();
 
-      // =========================
       // A) SI on attend une note pour ce topic -> on l'enregistre
-      // =========================
       if (pendingPwaNotes[threadId]) {
+        // On ne prend que les textes
         if (!text) {
           await tgSendMessage({
             message_thread_id: Number(threadId),
@@ -289,6 +279,7 @@ app.post("/webhook", async (req, res) => {
         const ctx = pendingPwaNotes[threadId];
         delete pendingPwaNotes[threadId];
 
+        // Cherche la ligne PWA Clients correspondante
         const record = await findPwaClientRecord({
           seller_slug: ctx.seller_slug,
           topic_id: threadId,
@@ -305,10 +296,12 @@ app.post("/webhook", async (req, res) => {
         const oldNote = record.fields?.admin_note || "";
         const merged = appendNote(oldNote, text);
 
+        // Mise à jour persistante dans Airtable
         await base("PWA Clients").update(record.id, {
           admin_note: merged,
         });
 
+        // 🔥 UPDATE DU PANEL EXISTANT (sans duplication)
         const panelMessageId = record.fields?.panel_message_id;
 
         if (panelMessageId) {
@@ -336,29 +329,32 @@ app.post("/webhook", async (req, res) => {
                 },
               }
             );
+
+            console.log("🧠 Panel updated for topic:", threadId);
           } catch (e) {
-            console.error("❌ Failed to edit panel:", e.response?.data || e.message);
+            console.error(
+              "❌ Failed to edit panel:",
+              e.response?.data || e.message
+            );
           }
+        } else {
+          console.warn("⚠️ panel_message_id manquant pour topic:", threadId);
         }
 
+        // Confirmation simple (sans renvoyer le panel)
         await tgSendMessage({
           message_thread_id: Number(threadId),
           text: "✅ Note enregistrée",
         });
 
+        console.log("✅ PWA note saved topic:", threadId);
         return res.sendStatus(200);
       }
 
-      // =========================
-      // B) ignore /env commands
-      // =========================
-      if (text.toLowerCase().startsWith("/env")) {
-        return res.sendStatus(200);
-      }
+      // B) ignore /env commands (pour ne pas polluer la PWA)
+      if (text.toLowerCase().startsWith("/env")) return res.sendStatus(200);
 
-      // =========================
-      // C) admin -> PWA message normal + calcul room
-      // =========================
+      // C) admin -> PWA message normal
       const records = await tablePWA
         .select({
           filterByFormula: `{topic_id}='${threadId}'`,
@@ -389,106 +385,164 @@ app.post("/webhook", async (req, res) => {
 
         console.log("📤 Admin → PWA:", room, text);
       }
-
-      
-      // =========================
-      // D) admin -> PWA MEDIA normal (photo / video / document)
-      // =========================
-      if (message.photo || message.video || message.document) {
-        const uniqueMediaKey = `${threadId}_${message.message_id}`;
-
-        // 🔒 Idempotence : ignore si déjà traité
-        if (processedMediaMessages.has(uniqueMediaKey)) {
-          console.log("⏭️ Duplicate media ignored:", uniqueMediaKey);
-          return res.sendStatus(200);
-        }
-
-        
-
-        try {
-          let fileId = null;
-          let mediaType = "photo";
-          let originalFileName = "file";
-
-          if (message.photo) {
-            fileId = message.photo[message.photo.length - 1].file_id;
-            mediaType = "photo";
-            originalFileName = "image.jpg";
-          } else if (message.video) {
-            fileId = message.video.file_id;
-            mediaType = "video";
-            originalFileName = message.video.file_name || "video.mp4";
-          } else if (message.document) {
-            fileId = message.document.file_id;
-            mediaType = "document";
-            originalFileName = message.document.file_name || "document.pdf";
-          }
-
-          if (!fileId) return res.sendStatus(200);
-
-          // 1) récupérer le fichier Telegram
-          const fileResp = await axios.get(
-            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
-          );
-
-          const filePath = fileResp.data.result.file_path;
-          const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
-
-          // 2) télécharger le fichier
-          const fileDownload = await axios.get(fileUrl, {
-            responseType: "arraybuffer",
-          });
-
-          // 3) nom propre sans espaces
-          const safeFileName = originalFileName.replace(/\s+/g, "_");
-
-          // 4) upload Cloudinary typé correctement
-          const uploadResult = await new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-              {
-                folder: "novapulse_media",
-                resource_type:
-                  mediaType === "document"
-                    ? "raw"
-                    : mediaType === "video"
-                    ? "video"
-                    : "image",
-              },
-              (error, result) => {
-                if (error) return reject(error);
-                resolve(result);
-              }
-            );
-
-            streamifier.createReadStream(fileDownload.data).pipe(stream);
-          });
-
-          const mediaUrl = uploadResult.secure_url;
-
-          // 5) envoyer à la PWA
-          io.to(room).emit("MEDIA_MESSAGE", {
-            mediaurl: mediaUrl,
-            mediakind: mediaType,
-            caption: message.caption || "",
-            fileName: safeFileName,
-          });
-
-          console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
-          processedMediaMessages.add(uniqueMediaKey);
-        } catch (err) {
-          console.error("❌ MEDIA NORMAL ERROR:", err.message);
-        }
-      }
     }
 
-    return res.sendStatus(200);
-    } catch (err) {
+
+    // D) admin -> PWA media (photo, video, document)
+const records = await tablePWA
+  .select({
+    filterByFormula: `{topic_id}='${threadId}'`,
+    maxRecords: 1,
+  })
+  .firstPage();
+
+if (!records.length) return res.sendStatus(200);
+
+const row = records[0].fields;
+const email = normEmail(row.email);
+const sellerSlug = normSlug(row.seller_slug);
+const room = pwaRoom(email, sellerSlug);
+
+// PHOTO
+if (message.photo && message.photo.length > 0) {
+  const fileId = message.photo[message.photo.length - 1].file_id;
+
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+
+  const filePath = fileResp.data.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  io.to(room).emit("admin_media", {
+    type: "photo",
+    url: fileUrl,
+  });
+
+  console.log("📸 Admin photo → PWA:", room);
+}
+
+// VIDEO
+if (message.video) {
+  const fileId = message.video.file_id;
+
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+
+  const filePath = fileResp.data.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  io.to(room).emit("admin_media", {
+    type: "video",
+    url: fileUrl,
+  });
+
+  console.log("🎥 Admin video → PWA:", room);
+}
+
+// DOCUMENT (PDF, devis, facture…)
+if (message.document) {
+  const fileId = message.document.file_id;
+  const fileName = message.document.file_name || "document";
+
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+
+  const filePath = fileResp.data.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  io.to(room).emit("admin_media", {
+    type: "document",
+    url: fileUrl,
+    fileName,
+  });
+
+  console.log("📄 Admin document → PWA:", room);
+
+}
+  } catch (err) {
     console.error("❌ /webhook error:", err.response?.data || err.message);
-    return res.sendStatus(200);
   }
+
+
+  // D) admin -> PWA media (photo, video, document)
+const records = await tablePWA
+  .select({
+    filterByFormula: `{topic_id}='${threadId}'`,
+    maxRecords: 1,
+  })
+  .firstPage();
+
+if (!records.length) return res.sendStatus(200);
+
+const row = records[0].fields;
+const email = normEmail(row.email);
+const sellerSlug = normSlug(row.seller_slug);
+const room = pwaRoom(email, sellerSlug);
+
+// PHOTO
+if (message.photo && message.photo.length > 0) {
+  const fileId = message.photo[message.photo.length - 1].file_id;
+
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+
+  const filePath = fileResp.data.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  io.to(room).emit("admin_media", {
+    type: "photo",
+    url: fileUrl,
+  });
+
+  console.log("📸 Admin photo → PWA:", room);
+}
+
+// VIDEO
+if (message.video) {
+  const fileId = message.video.file_id;
+
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+
+  const filePath = fileResp.data.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  io.to(room).emit("admin_media", {
+    type: "video",
+    url: fileUrl,
+  });
+
+  console.log("🎥 Admin video → PWA:", room);
+}
+
+// DOCUMENT (PDF, devis, facture…)
+if (message.document) {
+  const fileId = message.document.file_id;
+  const fileName = message.document.file_name || "document";
+
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+
+  const filePath = fileResp.data.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  io.to(room).emit("admin_media", {
+    type: "document",
+    url: fileUrl,
+    fileName,
+  });
+
+  console.log("📄 Admin document → PWA:", room);
+}
+
+  return res.sendStatus(200);
 });
-
-
 // =======================
 // SOCKET.IO (PWA ⇄ TELEGRAM)
 // =======================
