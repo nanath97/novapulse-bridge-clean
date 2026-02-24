@@ -217,7 +217,6 @@ app.post("/webhook", async (req, res) => {
 
       // ✅ On ne gère ici QUE les callbacks PWA
       if (data.startsWith("annoter_pwa_") && threadId) {
-        // On récupère le client (seller_slug) via topic_id pour être cohérent
         const records = await tablePWA
           .select({
             filterByFormula: `{topic_id}='${threadId}'`,
@@ -265,9 +264,10 @@ app.post("/webhook", async (req, res) => {
       const text = (message.text || "").trim();
       const threadId = String(message.message_thread_id).trim();
 
+      // =========================
       // A) SI on attend une note pour ce topic -> on l'enregistre
+      // =========================
       if (pendingPwaNotes[threadId]) {
-        // On ne prend que les textes
         if (!text) {
           await tgSendMessage({
             message_thread_id: Number(threadId),
@@ -279,7 +279,6 @@ app.post("/webhook", async (req, res) => {
         const ctx = pendingPwaNotes[threadId];
         delete pendingPwaNotes[threadId];
 
-        // Cherche la ligne PWA Clients correspondante
         const record = await findPwaClientRecord({
           seller_slug: ctx.seller_slug,
           topic_id: threadId,
@@ -332,16 +331,12 @@ app.post("/webhook", async (req, res) => {
 
             console.log("🧠 Panel updated for topic:", threadId);
           } catch (e) {
-            console.error(
-              "❌ Failed to edit panel:",
-              e.response?.data || e.message
-            );
+            console.error("❌ Failed to edit panel:", e.response?.data || e.message);
           }
         } else {
           console.warn("⚠️ panel_message_id manquant pour topic:", threadId);
         }
 
-        // Confirmation simple (sans renvoyer le panel)
         await tgSendMessage({
           message_thread_id: Number(threadId),
           text: "✅ Note enregistrée",
@@ -351,10 +346,14 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
+      // =========================
       // B) ignore /env commands (pour ne pas polluer la PWA)
+      // =========================
       if (text.toLowerCase().startsWith("/env")) return res.sendStatus(200);
 
-      // C) admin -> PWA message normal
+      // =========================
+      // C) admin -> PWA message normal + calcul room
+      // =========================
       const records = await tablePWA
         .select({
           filterByFormula: `{topic_id}='${threadId}'`,
@@ -385,15 +384,10 @@ app.post("/webhook", async (req, res) => {
 
         console.log("📤 Admin → PWA:", room, text);
       }
-    }
-  } catch (err) {
-    console.error("❌ /webhook error:", err.response?.data || err.message);
-  }
 
-  return res.sendStatus(200);
-});
-
+      // =========================
       // D) admin -> PWA MEDIA normal (photo / video / document)
+      // =========================
       if (message.photo || message.video || message.document) {
         let fileId = null;
         let mediaType = "photo";
@@ -449,9 +443,18 @@ app.post("/webhook", async (req, res) => {
 
           console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
         } catch (err) {
-          console.error("❌ MEDIA NORMAL ERROR:", err.message);
+          console.error("❌ MEDIA NORMAL ERROR:", err.response?.data || err.message);
         }
       }
+
+      return res.sendStatus(200);
+    }
+  } catch (err) {
+    console.error("❌ /webhook error:", err.response?.data || err.message);
+  }
+
+  return res.sendStatus(200);
+});
 
 
 // =======================
