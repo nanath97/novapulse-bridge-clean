@@ -467,8 +467,8 @@ app.post("/webhook", async (req, res) => {
 
           // 5) envoyer à la PWA
           io.to(room).emit("MEDIA_MESSAGE", {
-            url: mediaUrl,
-            kind: mediaType,
+            mediaurl: mediaUrl,
+            mediakind: mediaType,
             caption: message.caption || "",
             fileName: safeFileName,
           });
