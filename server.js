@@ -21,6 +21,16 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
 const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
+// =======================
+// IDPOTENCE MEDIA (anti-duplicate Telegram updates)
+// =======================
+const processedMediaMessages = new Set();
+
+// Optionnel mais recommandé : purge automatique pour éviter que le Set grossisse à l’infini
+setInterval(() => {
+  processedMediaMessages.clear();
+  console.log("🧹 processedMediaMessages cleared");
+}, 6 * 60 * 60 * 1000); // toutes les 6 heures
 
 const multer = require("multer");
 const streamifier = require("streamifier");
@@ -380,9 +390,7 @@ app.post("/webhook", async (req, res) => {
         console.log("📤 Admin → PWA:", room, text);
       }
 
-      // =========================
-      // D) admin -> PWA MEDIA normal (photo / video / document)
-      // =========================
+      
       // =========================
       // D) admin -> PWA MEDIA normal (photo / video / document)
       // =========================
@@ -395,7 +403,7 @@ app.post("/webhook", async (req, res) => {
           return res.sendStatus(200);
         }
 
-        processedMediaMessages.add(uniqueMediaKey);
+        
 
         try {
           let fileId = null;
@@ -466,6 +474,7 @@ app.post("/webhook", async (req, res) => {
           });
 
           console.log("📸 MEDIA SENT:", mediaType, mediaUrl);
+          processedMediaMessages.add(uniqueMediaKey);
         } catch (err) {
           console.error("❌ MEDIA NORMAL ERROR:", err.message);
         }
