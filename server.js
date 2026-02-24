@@ -257,6 +257,8 @@ app.post("/webhook", async (req, res) => {
 if (!update || !update.message) return res.sendStatus(200);
 
 const message = update.message;
+const caption = (message.caption || "").toLowerCase();
+const isPaywallCommand = caption.includes("/env");
 
 // Only staff supergroup topic messages
 if (
@@ -384,6 +386,10 @@ if (
   // D) admin -> PWA media (photo, video, document)
   // PHOTO
   if (message.photo && message.photo.length > 0) {
+  if (isPaywallCommand) {
+    console.log("⛔ PHOTO ignorée (paywall géré par Python)");
+    return res.sendStatus(200);
+  }
     const fileId = message.photo[message.photo.length - 1].file_id;
 
     const fileResp = await axios.get(
@@ -405,6 +411,10 @@ if (
 
   // VIDEO
   if (message.video) {
+  if (isPaywallCommand) {
+    console.log("⛔ VIDEO ignorée (paywall géré par Python)");
+    return res.sendStatus(200);
+  }
     const fileId = message.video.file_id;
 
     const fileResp = await axios.get(
@@ -426,6 +436,10 @@ if (
 
   // DOCUMENT (PDF, devis, facture…)
   if (message.document) {
+  if (isPaywallCommand) {
+    console.log("⛔ DOCUMENT ignoré (paywall géré par Python)");
+    return res.sendStatus(200);
+  }
     const fileId = message.document.file_id;
     const fileName = message.document.file_name || "document";
 
