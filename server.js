@@ -950,6 +950,39 @@ app.post("/pwa/send-admin-message", async (req, res) => {
   }
 });
 // =======================
+// PWA: SEND SYSTEM ADMIN MEDIA (NORMAL MEDIA MESSAGE)
+// =======================
+app.post("/pwa/send-admin-media", async (req, res) => {
+  try {
+    const { email, sellerSlug, text, mediaUrl } = req.body;
+
+    const room = pwaRoom(email, sellerSlug);
+
+    console.log("🖼️ SEND ADMIN MEDIA →", room, mediaUrl);
+
+    // Détection automatique du type de média
+    let mediaType = "photo";
+    if (mediaUrl?.includes("/video/")) {
+      mediaType = "video";
+    } else if (mediaUrl?.toLowerCase().endsWith(".pdf")) {
+      mediaType = "document";
+    }
+
+    io.to(room).emit("admin_media", {
+      type: mediaType,
+      url: mediaUrl,
+      fileName: mediaUrl?.split("/").pop(),
+      text: text || "",
+      from: "admin",
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /pwa/send-admin-media error:", err.message);
+    return res.status(500).json({ success: false });
+  }
+});
+// =======================
 // START
 // =======================
 const PORT = process.env.PORT || 10000;
