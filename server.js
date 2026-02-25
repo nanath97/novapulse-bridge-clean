@@ -366,7 +366,7 @@ if (
   const room = pwaRoom(email, sellerSlug);
 
   // C1) admin -> PWA texte normal
-  if (text) {
+  if (text && !message.photo && !message.video && !message.document) {
     await tableMessages.create({
       email,
       seller_slug: sellerSlug,
@@ -401,13 +401,6 @@ if (
     if (filePath) {
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
-      // 🔥 1) ENVOI DU CAPTION SI EXISTE
-      if (message.caption) {
-        io.to(room).emit("admin_message", {
-          text: message.caption,
-          from: "admin",
-        });
-      }
 
       // 🔥 2) ENVOI DE LA PHOTO
       io.to(room).emit("admin_media", {
