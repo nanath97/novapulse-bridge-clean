@@ -958,13 +958,17 @@ app.post("/pwa/send-admin-media", async (req, res) => {
 
     const room = pwaRoom(email, sellerSlug);
 
-    console.log("🖼️ SEND ADMIN MEDIA →", room, mediaUrl);
+    console.log("🖼️ SEND ADMIN MEDIA →", room, mediaUrl, text);
 
-    // Détection automatique du type de média
+    // Détection fiable du type
     let mediaType = "photo";
+
     if (mediaUrl?.includes("/video/")) {
       mediaType = "video";
-    } else if (mediaUrl?.toLowerCase().endsWith(".pdf")) {
+    } else if (
+      mediaUrl?.toLowerCase().includes(".pdf") ||
+      mediaUrl?.toLowerCase().includes("/raw/")
+    ) {
       mediaType = "document";
     }
 
@@ -972,7 +976,7 @@ app.post("/pwa/send-admin-media", async (req, res) => {
       type: mediaType,
       url: mediaUrl,
       fileName: mediaUrl?.split("/").pop(),
-      text: text || "",
+      text: text || "", // 🔥 CAPTION TRANSMIS
       from: "admin",
     });
 
