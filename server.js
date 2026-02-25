@@ -413,6 +413,9 @@ if (
       io.to(room).emit("admin_media", {
         type: "photo",
         url: fileUrl,
+        fileName: "photo",
+        text: message.caption || "",
+        from: "admin",
       });
 
       console.log("📸 Admin PHOTO + caption → PWA:", room);
@@ -420,70 +423,55 @@ if (
   }
 
     if (message.video) {
-    if (isPaywallCommand) {
-      console.log("⛔ VIDEO ignorée (paywall géré par Python)");
-      return res.sendStatus(200);
-    }
+  if (isPaywallCommand) return res.sendStatus(200);
 
-    const fileId = message.video.file_id;
+  const fileId = message.video.file_id;
 
-    const fileResp = await axios.get(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
-    );
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
 
-    const filePath = fileResp.data?.result?.file_path;
-    if (filePath) {
-      const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+  const filePath = fileResp.data?.result?.file_path;
+  if (filePath) {
+    const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
-      if (message.caption) {
-        io.to(room).emit("admin_message", {
-          text: message.caption,
-          from: "admin",
-        });
-      }
+    io.to(room).emit("admin_media", {
+      type: "video",
+      url: fileUrl,
+      fileName: message.video.file_name || "video",
+      text: message.caption || "",
+      from: "admin",
+    });
 
-      io.to(room).emit("admin_media", {
-        type: "video",
-        url: fileUrl,
-      });
-
-      console.log("🎥 Admin VIDEO + caption → PWA:", room);
-    }
+    console.log("🎥 Admin VIDEO + caption → PWA:", room);
   }
+}
 
     if (message.document) {
-    if (isPaywallCommand) {
-      console.log("⛔ DOCUMENT ignoré (paywall géré par Python)");
-      return res.sendStatus(200);
-    }
+  if (isPaywallCommand) return res.sendStatus(200);
 
-    const fileId = message.document.file_id;
-    const fileName = message.document.file_name || "document";
+  const fileId = message.document.file_id;
+  const fileName = message.document.file_name || "document";
 
-    const fileResp = await axios.get(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
-    );
+  const fileResp = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
 
-    const filePath = fileResp.data?.result?.file_path;
-    if (filePath) {
-      const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+  const filePath = fileResp.data?.result?.file_path;
+  if (filePath) {
+    const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
-      if (message.caption) {
-        io.to(room).emit("admin_message", {
-          text: message.caption,
-          from: "admin",
-        });
-      }
+    io.to(room).emit("admin_media", {
+      type: "document",
+      url: fileUrl,
+      fileName,
+      text: message.caption || "",
+      from: "admin",
+    });
 
-      io.to(room).emit("admin_media", {
-        type: "document",
-        url: fileUrl,
-        fileName,
-      });
-
-      console.log("📄 Admin DOCUMENT + caption → PWA:", room);
-    }
+    console.log("📄 Admin DOCUMENT + caption → PWA:", room);
   }
+}
 } // ← ferme le if(supergroup topic)
 } catch (err) {
   console.error("❌ /webhook error:", err.response?.data || err.message);
