@@ -576,7 +576,10 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     console.log("📤 Uploading media to Cloudinary...");
 
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: "novapulse_media" },
+  {
+    folder: "novapulse_media",
+    resource_type: "auto", // 🔥 IMPORTANT pour vidéos, pdf, audio
+  },
       (error, result) => {
         if (error) {
           console.error("❌ Cloudinary error:", error);
