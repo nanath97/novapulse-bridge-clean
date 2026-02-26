@@ -566,8 +566,7 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     } else if (
       mimeType.includes("pdf") ||
       mimeType.includes("msword") ||
-      mimeType.includes("officedocument") ||
-      mimeType.includes("application")
+      mimeType.includes("officedocument")
     ) {
       resourceType = "raw";
     }
