@@ -998,7 +998,6 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Média client (${email})`,
         }
       );
-
     } else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
@@ -1009,16 +1008,15 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Vidéo client (${email})`,
         }
       );
-
     } else {
-      // 📄 DOCUMENT (PDF, DOC, etc.)
       console.log("📄 Sending document via stream:", mediaUrl);
 
       const response = await axios.get(mediaUrl, {
         responseType: "arraybuffer",
       });
 
-      const formData = new (require("form-data"))();
+      const FormData = require("form-data");
+      const formData = new FormData();
       formData.append("chat_id", STAFF_GROUP_ID);
       formData.append("message_thread_id", Number(topicId));
       formData.append("caption", `📎 Document client (${email})`);
@@ -1038,7 +1036,6 @@ app.post("/pwa/client-send-media", async (req, res) => {
     }
 
     return res.json({ success: true });
-
   } catch (err) {
     console.error(
       "❌ /pwa/client-send-media error:",
@@ -1046,4 +1043,12 @@ app.post("/pwa/client-send-media", async (req, res) => {
     );
     return res.status(500).json({ success: false });
   }
+});
+
+
+
+const PORT = process.env.PORT || 10000;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Bridge running on port ${PORT}`);
 });
