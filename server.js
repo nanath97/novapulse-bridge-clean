@@ -587,20 +587,35 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
 
         console.log("✅ Media uploaded:", result.secure_url);
 
+        // 🔥 FIX CRITIQUE : garantir extension pour Telegram
+        let finalUrl = result.secure_url;
+
+        if (resourceType === "raw") {
+          const originalName = req.file.originalname || "file.pdf";
+          const ext = originalName.split(".").pop();
+
+          if (ext && !finalUrl.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) {
+            finalUrl = `${finalUrl}.${ext}`;
+          }
+        }
+
+        console.log("🌍 Final media URL:", finalUrl);
+
         return res.json({
           success: true,
-          mediaUrl: result.secure_url,
+          mediaUrl: finalUrl,
         });
       }
     );
 
+    // ⚠️ IMPORTANT : le pipe doit être en dehors du callback
     streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+
   } catch (err) {
     console.error("❌ /upload-media error:", err.message);
     return res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
-
 // =======================
 // PWA: SEND PAID CONTENT (BLUR + CHECKOUT)
 // =======================
