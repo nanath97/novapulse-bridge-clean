@@ -580,7 +580,7 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "novapulse_media",
-        resource_type: resourceType,
+        resource_type: "raw",
         use_filename: true,
         unique_filename: true,
       },
