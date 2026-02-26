@@ -965,6 +965,61 @@ app.post("/pwa/send-admin-media", async (req, res) => {
     return res.status(500).json({ success: false });
   }
 });
+
+
+
+// =======================
+// PWA: CLIENT SEND MEDIA → TELEGRAM TOPIC
+// =======================
+app.post("/pwa/client-send-media", async (req, res) => {
+  try {
+    const { email, sellerSlug, mediaUrl, mediaType, fileName } = req.body;
+
+    const topicId = await findTopicIdByEmailSlug(email, sellerSlug);
+    if (!topicId) {
+      return res.status(404).json({ success: false, error: "topic_not_found" });
+    }
+
+    console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
+
+    if (mediaType === "photo") {
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          message_thread_id: Number(topicId),
+          photo: mediaUrl,
+          caption: `📎 Média client (${email})`,
+        }
+      );
+    } else if (mediaType === "video") {
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          message_thread_id: Number(topicId),
+          video: mediaUrl,
+          caption: `📎 Vidéo client (${email})`,
+        }
+      );
+    } else {
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          message_thread_id: Number(topicId),
+          document: mediaUrl,
+          caption: `📎 Document client (${email})`,
+        }
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /pwa/client-send-media error:", err.response?.data || err.message);
+    return res.status(500).json({ success: false });
+  }
+});
 // =======================
 // START
 // =======================
