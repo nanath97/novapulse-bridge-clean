@@ -1016,22 +1016,14 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     // 📄 DOCUMENT (PDF / DOC / etc.) → upload buffer (FIABLE)
     else {
-  console.log("📄 Sending document via Cloudinary RAW URL:", mediaUrl);
-
-  // Force l'URL brute (très important)
-  let rawUrl = mediaUrl;
-  if (rawUrl.includes("/image/upload/")) {
-    rawUrl = rawUrl.replace("/image/upload/", "/raw/upload/");
-  }
-
-  console.log("📄 Final RAW URL:", rawUrl);
+  console.log("📄 Sending document via direct Cloudinary URL:", mediaUrl);
 
   await axios.post(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
     {
       chat_id: STAFF_GROUP_ID,
       message_thread_id: Number(topicId),
-      document: rawUrl,
+      document: mediaUrl, // 🔥 URL directe, pas modifiée
       caption: `📎 Document client (${email})`,
     }
   );
