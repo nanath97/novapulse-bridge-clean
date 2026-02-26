@@ -1013,6 +1013,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
 
+    // PHOTO
     if (mediaType === "photo") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
@@ -1023,7 +1024,10 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Média client (${email})`,
         }
       );
-    } else if (mediaType === "video") {
+    }
+
+    // VIDEO
+    else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
         {
@@ -1033,32 +1037,41 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Vidéo client (${email})`,
         }
       );
-      }else {
-  // 🔥 FIX FINAL : garantir extension correcte pour Telegram
-  let finalUrl = mediaUrl;
-
-  if (fileName && !finalUrl.includes(".")) {
-    const ext = fileName.split(".").pop();
-    finalUrl = `${mediaUrl}.${ext}`;
-  }
-
-  console.log("📄 Sending document via fixed URL:", finalUrl, "fileName:", fileName);
-
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-    {
-      chat_id: STAFF_GROUP_ID,
-      message_thread_id: Number(topicId),
-      document: finalUrl,
-      caption: `📎 Document client (${email})`,
     }
-  );
-}
+
+    // 📄 DOCUMENT → BUFFER (SEULE MÉTHODE FIABLE)
+    else {
+      console.log("📄 Downloading document buffer from:", mediaUrl);
+
+      const fileResp = await axios.get(mediaUrl, {
+        responseType: "arraybuffer",
+      });
+
+      const formData = new FormData();
+      formData.append("chat_id", STAFF_GROUP_ID);
+      formData.append("message_thread_id", Number(topicId));
+      formData.append(
+        "document",
+        Buffer.from(fileResp.data),
+        fileName || "document.pdf"
+      );
+      formData.append("caption", `📎 Document client (${email})`);
+
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        formData,
+        { headers: formData.getHeaders() }
+      );
+    }
 
     console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
     return res.json({ success: true });
+
   } catch (err) {
-    console.error("❌ /pwa/client-send-media error:", err.response?.data || err.message);
+    console.error(
+      "❌ /pwa/client-send-media error:",
+      err.response?.data || err.message
+    );
     return res.status(500).json({ success: false, error: "send_failed" });
   }
 });
