@@ -1016,34 +1016,23 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     // 📄 DOCUMENT (PDF / DOC / etc.) → upload buffer (FIABLE)
     else {
-  console.log("📄 Downloading RAW document from Cloudinary:", mediaUrl);
+  console.log("📄 Sending document via Cloudinary RAW URL:", mediaUrl);
 
-  // 🔥 Forcer le téléchargement brut (important pour PDF)
-  const rawUrl = mediaUrl.replace("/image/upload/", "/raw/upload/");
-
-  const fileResp = await axios.get(rawUrl, {
-    responseType: "arraybuffer",
-  });
-
-  if (!fileResp.data || fileResp.data.byteLength === 0) {
-    throw new Error("Empty file buffer from Cloudinary");
+  // Force l'URL brute (très important)
+  let rawUrl = mediaUrl;
+  if (rawUrl.includes("/image/upload/")) {
+    rawUrl = rawUrl.replace("/image/upload/", "/raw/upload/");
   }
 
-  const formData = new FormData();
-  formData.append("chat_id", STAFF_GROUP_ID);
-  formData.append("message_thread_id", Number(topicId));
-  formData.append("caption", `📎 Document client (${email})`);
-  formData.append(
-    "document",
-    Buffer.from(fileResp.data),
-    fileName || "document.pdf"
-  );
+  console.log("📄 Final RAW URL:", rawUrl);
 
   await axios.post(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-    formData,
     {
-      headers: formData.getHeaders(),
+      chat_id: STAFF_GROUP_ID,
+      message_thread_id: Number(topicId),
+      document: rawUrl,
+      caption: `📎 Document client (${email})`,
     }
   );
 }
