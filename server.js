@@ -550,9 +550,6 @@ io.on("connection", (socket) => {
 // =======================
 // UPLOAD MEDIA → CLOUDINARY
 // =======================
-// =======================
-// UPLOAD MEDIA → CLOUDINARY (FIX PDF = RAW)
-// =======================
 app.post("/upload-media", upload.single("file"), async (req, res) => {
   console.log("🔥 /upload-media route HIT");
 
@@ -561,42 +558,38 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
       return res.status(400).json({ success: false, error: "No file uploaded" });
     }
 
-    const mime = req.file.mimetype || "";
-    const originalName = req.file.originalname || "file";
-    const isPdf =
-      mime === "application/pdf" || originalName.toLowerCase().endsWith(".pdf");
+    const mimeType = req.file.mimetype || "";
+    let resourceType = "image";
 
-    // ✅ IMPORTANT:
-    // - PDF => resource_type "raw"
-    // - images/videos => "auto"
-    const resourceType = isPdf ? "raw" : "auto";
+    if (mimeType.startsWith("video")) {
+      resourceType = "video";
+    } else if (
+      mimeType.includes("pdf") ||
+      mimeType.includes("msword") ||
+      mimeType.includes("officedocument") ||
+      mimeType.includes("application")
+    ) {
+      resourceType = "raw";
+    }
 
-    console.log("📤 Uploading to Cloudinary:", {
-      originalName,
-      mime,
-      resourceType,
-    });
+    console.log("📦 Upload type detected:", mimeType, "→", resourceType);
 
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "novapulse_media",
-        resource_type: "raw",
-        use_filename: true,
-        unique_filename: true,
+        resource_type: resourceType, // 🔥 dynamique
       },
       (error, result) => {
         if (error) {
           console.error("❌ Cloudinary error:", error);
-          return res
-            .status(500)
-            .json({ success: false, error: "Cloudinary upload failed" });
+          return res.status(500).json({ success: false, error: "Cloudinary upload failed" });
         }
 
-        console.log("✅ Media uploaded:", result.secure_url, "resource_type:", result.resource_type);
+        console.log("✅ Media uploaded:", result.secure_url);
 
         return res.json({
           success: true,
-          mediaUrl: result.secure_url, // <-- pour PDF ça deviendra .../raw/upload/...
+          mediaUrl: result.secure_url,
         });
       }
     );
