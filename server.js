@@ -23,6 +23,7 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
 const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
+const FormData = require("form-data");
 
 const multer = require("multer");
 const streamifier = require("streamifier");
@@ -997,6 +998,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Média client (${email})`,
         }
       );
+
     } else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
@@ -1007,29 +1009,41 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Vidéo client (${email})`,
         }
       );
+
     } else {
+      // 📄 DOCUMENT (PDF, DOC, etc.)
+      console.log("📄 Sending document via stream:", mediaUrl);
+
+      const response = await axios.get(mediaUrl, {
+        responseType: "arraybuffer",
+      });
+
+      const formData = new (require("form-data"))();
+      formData.append("chat_id", STAFF_GROUP_ID);
+      formData.append("message_thread_id", Number(topicId));
+      formData.append("caption", `📎 Document client (${email})`);
+      formData.append(
+        "document",
+        Buffer.from(response.data),
+        fileName || "document.pdf"
+      );
+
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        formData,
         {
-          chat_id: STAFF_GROUP_ID,
-          message_thread_id: Number(topicId),
-          document: mediaUrl,
-          caption: `📎 Document client (${email})`,
+          headers: formData.getHeaders(),
         }
       );
     }
 
     return res.json({ success: true });
+
   } catch (err) {
-    console.error("❌ /pwa/client-send-media error:", err.response?.data || err.message);
+    console.error(
+      "❌ /pwa/client-send-media error:",
+      err.response?.data || err.message
+    );
     return res.status(500).json({ success: false });
   }
-});
-// =======================
-// START
-// =======================
-const PORT = process.env.PORT || 10000;
-
-server.listen(PORT, () => {
-  console.log(`🚀 Bridge running on port ${PORT}`);
 });
