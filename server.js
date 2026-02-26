@@ -573,11 +573,14 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     }
 
     console.log("📦 Upload type detected:", mimeType, "→", resourceType);
+    console.log("📎 originalname:", req.file.originalname);
 
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "novapulse_media",
-        resource_type: resourceType, // 🔥 dynamique
+        resource_type: resourceType,
+        // IMPORTANT: on ne force PAS le format dans l'URL pour raw.
+        // On garde l'URL Cloudinary telle qu'elle est retournée.
       },
       (error, result) => {
         if (error) {
@@ -587,30 +590,18 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
 
         console.log("✅ Media uploaded:", result.secure_url);
 
-        // 🔥 FIX CRITIQUE : garantir extension pour Telegram
-        let finalUrl = result.secure_url;
-
-        if (resourceType === "raw") {
-          const originalName = req.file.originalname || "file.pdf";
-          const ext = originalName.split(".").pop();
-
-          if (ext && !finalUrl.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) {
-            finalUrl = `${finalUrl}.${ext}`;
-          }
-        }
-
-        console.log("🌍 Final media URL:", finalUrl);
-
+        // 🔥 NE PAS MODIFIER L'URL (pas de .pdf ajouté)
         return res.json({
           success: true,
-          mediaUrl: finalUrl,
+          mediaUrl: result.secure_url,
+          originalName: req.file.originalname || "",
+          mimeType,
+          resourceType,
         });
       }
     );
 
-    // ⚠️ IMPORTANT : le pipe doit être en dehors du callback
     streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-
   } catch (err) {
     console.error("❌ /upload-media error:", err.message);
     return res.status(500).json({ success: false, error: "Upload failed" });
@@ -1095,96 +1086,74 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl, "fileName:", fileName);
 
-    // PHOTO (URL directe)
+    // 📸 PHOTO (URL directe)
     if (mediaType === "photo") {
-      const tg = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-        {
-          chat_id: STAFF_GROUP_ID,
-          message_thread_id: Number(topicId),
-          photo: mediaUrl,
-          caption: `📎 Média client (${email})`,
-        },
-        { validateStatus: () => true }
-      );
+      await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+        chat_id: STAFF_GROUP_ID,
+        message_thread_id: Number(topicId),
+        photo: mediaUrl,
+        caption: `📎 Média client (${email})`,
+      });
 
-      if (tg.status !== 200 || tg.data?.ok === false) {
-        console.log("❌ Telegram sendPhoto failed:", tg.status, tg.data);
-        return res.status(500).json({ success: false, error: "telegram_sendPhoto_failed" });
-      }
-
-      console.log("✅ CLIENT PHOTO SENT:", topicId);
+      console.log("✅ CLIENT PHOTO SENT topic:", topicId);
       return res.json({ success: true });
     }
 
-    // VIDEO (URL directe)
+    // 🎥 VIDEO (URL directe)
     if (mediaType === "video") {
-      const tg = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
-        {
-          chat_id: STAFF_GROUP_ID,
-          message_thread_id: Number(topicId),
-          video: mediaUrl,
-          caption: `📎 Vidéo client (${email})`,
-        },
-        { validateStatus: () => true }
-      );
+      await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
+        chat_id: STAFF_GROUP_ID,
+        message_thread_id: Number(topicId),
+        video: mediaUrl,
+        caption: `📎 Vidéo client (${email})`,
+      });
 
-      if (tg.status !== 200 || tg.data?.ok === false) {
-        console.log("❌ Telegram sendVideo failed:", tg.status, tg.data);
-        return res.status(500).json({ success: false, error: "telegram_sendVideo_failed" });
-      }
-
-      console.log("✅ CLIENT VIDEO SENT:", topicId);
+      console.log("✅ CLIENT VIDEO SENT topic:", topicId);
       return res.json({ success: true });
     }
 
-    // DOCUMENT (PDF/DOC/etc.) -> DOWNLOAD BUFFER -> SEND MULTIPART
+    // 📄 DOCUMENT: on télécharge le buffer depuis Cloudinary (URL exacte) puis upload Telegram
     console.log("📄 Document: downloading buffer before Telegram upload...");
-    const { buffer, usedUrl, contentType } = await downloadFileBuffer({ mediaUrl, fileName });
+    console.log("📄 Trying download URL:", mediaUrl);
 
-    const safeName = (fileName && String(fileName).trim()) ? String(fileName).trim() : "document.pdf";
+    const fileResp = await axios.get(mediaUrl, {
+      responseType: "arraybuffer",
+      timeout: 20000,
+      // parfois Cloudinary renvoie mieux avec un User-Agent
+      headers: { "User-Agent": "Mozilla/5.0" },
+      validateStatus: () => true,
+    });
+
+    if (fileResp.status !== 200 || !fileResp.data || fileResp.data.byteLength === 0) {
+      console.warn("⚠️ Download failed:", fileResp.status, "headers:", fileResp.headers);
+      return res.status(500).json({ success: false, error: `download_failed_status_${fileResp.status}` });
+    }
+
+    const safeName = String(fileName || "document.pdf")
+      .replace(/[\/\\?%*:|"<>]/g, "_")
+      .slice(0, 120);
+
+    const buf = Buffer.from(fileResp.data);
 
     const formData = new FormData();
-    formData.append("chat_id", STAFF_GROUP_ID);
-    formData.append("message_thread_id", Number(topicId));
+    formData.append("chat_id", String(STAFF_GROUP_ID));
+    formData.append("message_thread_id", String(Number(topicId)));
     formData.append("caption", `📎 Document client (${email})`);
-    formData.append("document", buffer, safeName);
+    formData.append("document", buf, {
+      filename: safeName,
+      contentType: "application/octet-stream",
+    });
 
-    console.log("📤 Uploading document to Telegram (buffer) from:", usedUrl, "content-type:", contentType);
-
-    const tgResp = await axios.post(
+    await axios.post(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
       formData,
-      {
-        headers: formData.getHeaders(),
-        timeout: 30000,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        validateStatus: () => true,
-      }
+      { headers: formData.getHeaders(), timeout: 30000 }
     );
 
-    // Telegram renvoie JSON {ok:true/false}
-    if (tgResp.status !== 200 || tgResp.data?.ok === false) {
-      console.log("❌ Telegram sendDocument failed:", tgResp.status, tgResp.data);
-      return res.status(500).json({ success: false, error: "telegram_sendDocument_failed", tg: tgResp.data });
-    }
-
-    console.log("✅ CLIENT DOCUMENT SENT:", topicId);
+    console.log("✅ CLIENT DOCUMENT SENT topic:", topicId);
     return res.json({ success: true });
-
   } catch (err) {
-    // IMPORTANT: afficher status + body lisible (même si buffer)
-    const status = err?.response?.status;
-    const headers = err?.response?.headers;
-    const bodyPreview = previewBody(err?.response?.data);
-
-    console.error("❌ /pwa/client-send-media error:", err?.message || err);
-    if (status) console.error("❌ status:", status);
-    if (headers) console.error("❌ headers:", headers);
-    if (bodyPreview) console.error("❌ body preview:", bodyPreview);
-
+    console.error("❌ /pwa/client-send-media error:", err.response?.data || err.message);
     return res.status(500).json({ success: false, error: "send_failed" });
   }
 });
