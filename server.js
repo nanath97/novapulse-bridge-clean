@@ -1000,9 +1000,90 @@ app.post("/pwa/send-admin-media", async (req, res) => {
 
 
 // =======================
+// HELPERS (add near other helpers)
+// =======================
+function previewBody(data) {
+  try {
+    if (!data) return "";
+    if (Buffer.isBuffer(data)) return data.toString("utf8").slice(0, 300);
+    if (data instanceof ArrayBuffer) return Buffer.from(data).toString("utf8").slice(0, 300);
+    if (typeof data === "string") return data.slice(0, 300);
+    return JSON.stringify(data).slice(0, 300);
+  } catch {
+    return "";
+  }
+}
+
+async function downloadFileBuffer({ mediaUrl, fileName }) {
+  // construit des variantes d’URL SANS casser l’original
+  const ext = (fileName && fileName.includes(".")) ? fileName.split(".").pop().toLowerCase() : null;
+
+  const candidates = [];
+  candidates.push(mediaUrl);
+
+  // Si Cloudinary "image/upload" pour un pdf -> tenter raw/upload
+  if (mediaUrl.includes("/image/upload/")) {
+    candidates.push(mediaUrl.replace("/image/upload/", "/raw/upload/"));
+  }
+
+  // Si pas d’extension dans l’URL mais fileName en a une -> ajouter .ext
+  if (ext && !mediaUrl.toLowerCase().includes(`.${ext}`)) {
+    candidates.push(`${mediaUrl}.${ext}`);
+    if (mediaUrl.includes("/image/upload/")) {
+      candidates.push(`${mediaUrl.replace("/image/upload/", "/raw/upload/")}.${ext}`);
+    }
+  }
+
+  // Cloudinary parfois plus “fetchable” avec fl_attachment
+  candidates.push(`${mediaUrl}${mediaUrl.includes("?") ? "&" : "?"}fl_attachment=true`);
+
+  // remove duplicates
+  const uniq = [...new Set(candidates)];
+
+  let lastErr = null;
+
+  for (const url of uniq) {
+    try {
+      console.log("📄 Trying download URL:", url);
+
+      const resp = await axios.get(url, {
+        responseType: "arraybuffer",
+        timeout: 20000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        validateStatus: () => true, // on gère nous-mêmes
+      });
+
+      if (resp.status !== 200) {
+        const body = previewBody(resp.data);
+        console.log("⚠️ Download failed:", resp.status, "headers:", resp.headers);
+        console.log("⚠️ Body preview:", body);
+        lastErr = new Error(`download_failed_status_${resp.status}`);
+        continue;
+      }
+
+      const buf = Buffer.from(resp.data);
+      if (!buf || buf.length === 0) {
+        lastErr = new Error("download_empty_buffer");
+        continue;
+      }
+
+      const contentType = (resp.headers?.["content-type"] || "").toLowerCase();
+      console.log("✅ Download OK:", url, "bytes=", buf.length, "content-type=", contentType);
+
+      return { buffer: buf, usedUrl: url, contentType };
+    } catch (e) {
+      lastErr = e;
+      console.log("⚠️ Download exception:", e?.message);
+    }
+  }
+
+  throw lastErr || new Error("download_failed_all_candidates");
+}
+
+// =======================
 // PWA: CLIENT SEND MEDIA → TELEGRAM TOPIC
 // =======================
-
 app.post("/pwa/client-send-media", async (req, res) => {
   try {
     const { email, sellerSlug, mediaUrl, mediaType, fileName } = req.body;
@@ -1012,67 +1093,98 @@ app.post("/pwa/client-send-media", async (req, res) => {
       return res.status(404).json({ success: false, error: "topic_not_found" });
     }
 
-    console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
+    console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl, "fileName:", fileName);
 
-    // PHOTO
+    // PHOTO (URL directe)
     if (mediaType === "photo") {
-      await axios.post(
+      const tg = await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
         {
           chat_id: STAFF_GROUP_ID,
           message_thread_id: Number(topicId),
           photo: mediaUrl,
           caption: `📎 Média client (${email})`,
-        }
+        },
+        { validateStatus: () => true }
       );
+
+      if (tg.status !== 200 || tg.data?.ok === false) {
+        console.log("❌ Telegram sendPhoto failed:", tg.status, tg.data);
+        return res.status(500).json({ success: false, error: "telegram_sendPhoto_failed" });
+      }
+
+      console.log("✅ CLIENT PHOTO SENT:", topicId);
+      return res.json({ success: true });
     }
 
-    // VIDEO
-    else if (mediaType === "video") {
-      await axios.post(
+    // VIDEO (URL directe)
+    if (mediaType === "video") {
+      const tg = await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
         {
           chat_id: STAFF_GROUP_ID,
           message_thread_id: Number(topicId),
           video: mediaUrl,
           caption: `📎 Vidéo client (${email})`,
-        }
+        },
+        { validateStatus: () => true }
       );
+
+      if (tg.status !== 200 || tg.data?.ok === false) {
+        console.log("❌ Telegram sendVideo failed:", tg.status, tg.data);
+        return res.status(500).json({ success: false, error: "telegram_sendVideo_failed" });
+      }
+
+      console.log("✅ CLIENT VIDEO SENT:", topicId);
+      return res.json({ success: true });
     }
 
-    // DOCUMENT (PDF / DOC / ETC) → BUFFER (ULTRA STABLE)
-    else {
-      console.log("📄 Downloading document buffer from:", mediaUrl);
+    // DOCUMENT (PDF/DOC/etc.) -> DOWNLOAD BUFFER -> SEND MULTIPART
+    console.log("📄 Document: downloading buffer before Telegram upload...");
+    const { buffer, usedUrl, contentType } = await downloadFileBuffer({ mediaUrl, fileName });
 
-      const fileResp = await axios.get(mediaUrl, {
-        responseType: "arraybuffer",
-      });
+    const safeName = (fileName && String(fileName).trim()) ? String(fileName).trim() : "document.pdf";
 
-      const formData = new FormData();
-      formData.append("chat_id", STAFF_GROUP_ID);
-      formData.append("message_thread_id", Number(topicId));
-      formData.append("caption", `📎 Document client (${email})`);
-      formData.append(
-        "document",
-        Buffer.from(fileResp.data),
-        fileName || "document.pdf"
-      );
+    const formData = new FormData();
+    formData.append("chat_id", STAFF_GROUP_ID);
+    formData.append("message_thread_id", Number(topicId));
+    formData.append("caption", `📎 Document client (${email})`);
+    formData.append("document", buffer, safeName);
 
-      await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-        formData,
-        { headers: formData.getHeaders() }
-      );
+    console.log("📤 Uploading document to Telegram (buffer) from:", usedUrl, "content-type:", contentType);
+
+    const tgResp = await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+      formData,
+      {
+        headers: formData.getHeaders(),
+        timeout: 30000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        validateStatus: () => true,
+      }
+    );
+
+    // Telegram renvoie JSON {ok:true/false}
+    if (tgResp.status !== 200 || tgResp.data?.ok === false) {
+      console.log("❌ Telegram sendDocument failed:", tgResp.status, tgResp.data);
+      return res.status(500).json({ success: false, error: "telegram_sendDocument_failed", tg: tgResp.data });
     }
 
-    console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
+    console.log("✅ CLIENT DOCUMENT SENT:", topicId);
     return res.json({ success: true });
 
   } catch (err) {
-    console.error(
-      "❌ /pwa/client-send-media error:",
-      err.response?.data || err.message
-    );
+    // IMPORTANT: afficher status + body lisible (même si buffer)
+    const status = err?.response?.status;
+    const headers = err?.response?.headers;
+    const bodyPreview = previewBody(err?.response?.data);
+
+    console.error("❌ /pwa/client-send-media error:", err?.message || err);
+    if (status) console.error("❌ status:", status);
+    if (headers) console.error("❌ headers:", headers);
+    if (bodyPreview) console.error("❌ body preview:", bodyPreview);
+
     return res.status(500).json({ success: false, error: "send_failed" });
   }
 });
