@@ -1002,12 +1002,10 @@ app.post("/pwa/send-admin-media", async (req, res) => {
 // =======================
 // PWA: CLIENT SEND MEDIA → TELEGRAM TOPIC
 // =======================
-// =======================
-// PWA: CLIENT SEND MEDIA → TELEGRAM TOPIC
-// =======================
+
 app.post("/pwa/client-send-media", async (req, res) => {
   try {
-    const { email, sellerSlug, mediaUrl, mediaType } = req.body;
+    const { email, sellerSlug, mediaUrl, mediaType, fileName } = req.body;
 
     const topicId = await findTopicIdByEmailSlug(email, sellerSlug);
     if (!topicId) {
@@ -1016,7 +1014,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
 
-    // 📸 PHOTO
+    // PHOTO
     if (mediaType === "photo") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
@@ -1029,7 +1027,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
       );
     }
 
-    // 🎥 VIDEO
+    // VIDEO
     else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
@@ -1042,18 +1040,28 @@ app.post("/pwa/client-send-media", async (req, res) => {
       );
     }
 
-    // 📄 DOCUMENT (PDF, DOC, etc.)
+    // DOCUMENT (PDF / DOC / ETC) → BUFFER (ULTRA STABLE)
     else {
-      console.log("📄 Sending document via ORIGINAL URL:", mediaUrl);
+      console.log("📄 Downloading document buffer from:", mediaUrl);
+
+      const fileResp = await axios.get(mediaUrl, {
+        responseType: "arraybuffer",
+      });
+
+      const formData = new FormData();
+      formData.append("chat_id", STAFF_GROUP_ID);
+      formData.append("message_thread_id", Number(topicId));
+      formData.append("caption", `📎 Document client (${email})`);
+      formData.append(
+        "document",
+        Buffer.from(fileResp.data),
+        fileName || "document.pdf"
+      );
 
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-        {
-          chat_id: STAFF_GROUP_ID,
-          message_thread_id: Number(topicId),
-          document: mediaUrl, // URL Cloudinary intacte
-          caption: `📎 Document client (${email})`,
-        }
+        formData,
+        { headers: formData.getHeaders() }
       );
     }
 
