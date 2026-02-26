@@ -1002,9 +1002,12 @@ app.post("/pwa/send-admin-media", async (req, res) => {
 // =======================
 // PWA: CLIENT SEND MEDIA → TELEGRAM TOPIC
 // =======================
+// =======================
+// PWA: CLIENT SEND MEDIA → TELEGRAM TOPIC
+// =======================
 app.post("/pwa/client-send-media", async (req, res) => {
   try {
-    const { email, sellerSlug, mediaUrl, mediaType, fileName } = req.body;
+    const { email, sellerSlug, mediaUrl, mediaType } = req.body;
 
     const topicId = await findTopicIdByEmailSlug(email, sellerSlug);
     if (!topicId) {
@@ -1013,7 +1016,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
 
-    // PHOTO
+    // 📸 PHOTO
     if (mediaType === "photo") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
@@ -1026,7 +1029,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
       );
     }
 
-    // VIDEO
+    // 🎥 VIDEO
     else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
@@ -1039,34 +1042,20 @@ app.post("/pwa/client-send-media", async (req, res) => {
       );
     }
 
-    // 📄 DOCUMENT → BUFFER (SEULE MÉTHODE FIABLE)
+    // 📄 DOCUMENT (PDF, DOC, etc.)
     else {
-  console.log("📄 Streaming document from:", mediaUrl);
+      console.log("📄 Sending document via ORIGINAL URL:", mediaUrl);
 
-  const fileResp = await axios.get(mediaUrl, {
-    responseType: "stream",
-  });
-
-  const formData = new FormData();
-  formData.append("chat_id", STAFF_GROUP_ID);
-  formData.append("message_thread_id", Number(topicId));
-  formData.append(
-    "document",
-    fileResp.data,
-    fileName || "document.pdf"
-  );
-  formData.append("caption", `📎 Document client (${email})`);
-
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-    formData,
-    {
-      headers: formData.getHeaders(),
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          message_thread_id: Number(topicId),
+          document: mediaUrl, // URL Cloudinary intacte
+          caption: `📎 Document client (${email})`,
+        }
+      );
     }
-  );
-}
 
     console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
     return res.json({ success: true });
