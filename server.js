@@ -935,29 +935,27 @@ app.post("/pwa/send-admin-message", async (req, res) => {
 // =======================
 app.post("/pwa/send-admin-media", async (req, res) => {
   try {
-    const { email, sellerSlug, text, mediaUrl } = req.body;
+    const { email, sellerSlug, text, mediaUrl, mediaType } = req.body;
 
     const room = pwaRoom(email, sellerSlug);
 
-    console.log("🖼️ SEND ADMIN MEDIA →", room, mediaUrl, text);
+    console.log("🖼️ SEND ADMIN MEDIA →", room, mediaUrl, text, mediaType);
 
-    // Détection fiable du type
-    let mediaType = "photo";
+    // 🔥 priorité au type envoyé par la PWA
+    let finalType = mediaType;
 
-    if (mediaUrl?.includes("/video/")) {
-      mediaType = "video";
-    } else if (
-      mediaUrl?.toLowerCase().includes(".pdf") ||
-      mediaUrl?.toLowerCase().includes("/raw/")
-    ) {
-      mediaType = "document";
+    // fallback sécurité si jamais oublié côté PWA
+    if (!finalType) {
+      if (mediaUrl?.includes("/video/")) finalType = "video";
+      else if (mediaUrl?.toLowerCase().includes(".pdf")) finalType = "document";
+      else finalType = "photo";
     }
 
     io.to(room).emit("admin_media", {
-      type: mediaType,
+      type: finalType,
       url: mediaUrl,
       fileName: mediaUrl?.split("/").pop(),
-      text: text || "", // 🔥 CAPTION TRANSMIS
+      text: text || "",
       from: "admin",
     });
 
