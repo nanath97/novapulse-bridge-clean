@@ -1016,33 +1016,37 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     // 📄 DOCUMENT (PDF / DOC / etc.) → upload buffer (FIABLE)
     else {
-      console.log("📄 Uploading document buffer to Telegram:", mediaUrl);
+  console.log("📄 Downloading RAW document from Cloudinary:", mediaUrl);
 
-      // 1️⃣ Télécharger le fichier depuis Cloudinary
-      const fileResp = await axios.get(mediaUrl, {
-        responseType: "arraybuffer",
-      });
+  // 🔥 Forcer le téléchargement brut (important pour PDF)
+  const rawUrl = mediaUrl.replace("/image/upload/", "/raw/upload/");
 
-      // 2️⃣ Construire un vrai multipart/form-data
-      const formData = new FormData();
-      formData.append("chat_id", STAFF_GROUP_ID);
-      formData.append("message_thread_id", Number(topicId));
-      formData.append("caption", `📎 Document client (${email})`);
-      formData.append(
-        "document",
-        Buffer.from(fileResp.data),
-        fileName || "document.pdf"
-      );
+  const fileResp = await axios.get(rawUrl, {
+    responseType: "arraybuffer",
+  });
 
-      // 3️⃣ Envoi réel du fichier à Telegram
-      await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-        formData,
-        {
-          headers: formData.getHeaders(),
-        }
-      );
+  if (!fileResp.data || fileResp.data.byteLength === 0) {
+    throw new Error("Empty file buffer from Cloudinary");
+  }
+
+  const formData = new FormData();
+  formData.append("chat_id", STAFF_GROUP_ID);
+  formData.append("message_thread_id", Number(topicId));
+  formData.append("caption", `📎 Document client (${email})`);
+  formData.append(
+    "document",
+    Buffer.from(fileResp.data),
+    fileName || "document.pdf"
+  );
+
+  await axios.post(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+    formData,
+    {
+      headers: formData.getHeaders(),
     }
+  );
+}
 
     console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
     return res.json({ success: true });
