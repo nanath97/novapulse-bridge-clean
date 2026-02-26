@@ -981,13 +981,20 @@ app.post("/pwa/client-send-media", async (req, res) => {
   try {
     const { email, sellerSlug, mediaUrl, mediaType, fileName } = req.body;
 
+    console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
+
+    if (!email || !sellerSlug || !mediaUrl) {
+      console.error("❌ Missing params:", req.body);
+      return res.status(400).json({ success: false, error: "missing_params" });
+    }
+
     const topicId = await findTopicIdByEmailSlug(email, sellerSlug);
     if (!topicId) {
+      console.error("❌ topic_not_found for:", email, sellerSlug);
       return res.status(404).json({ success: false, error: "topic_not_found" });
     }
 
-    console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
-
+    // ================= PHOTO =================
     if (mediaType === "photo") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
@@ -998,7 +1005,10 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Média client (${email})`,
         }
       );
-    } else if (mediaType === "video") {
+    }
+
+    // ================= VIDEO =================
+    else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
         {
@@ -1008,37 +1018,51 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Vidéo client (${email})`,
         }
       );
-    } else {
+    }
+
+    // ================= DOCUMENT (PDF etc) =================
+    else {
       console.log("📄 Sending document via stream:", mediaUrl);
 
-      const response = await axios.get(mediaUrl, {
-        responseType: "arraybuffer",
-      });
+      let fileBuffer;
 
-      const FormData = require("form-data");
+      try {
+        const response = await axios.get(mediaUrl, {
+          responseType: "arraybuffer",
+        });
+        fileBuffer = Buffer.from(response.data);
+      } catch (downloadErr) {
+        console.error("❌ Failed to download mediaUrl:", downloadErr.message);
+        return res.status(500).json({ success: false, error: "download_failed" });
+      }
+
       const formData = new FormData();
       formData.append("chat_id", STAFF_GROUP_ID);
       formData.append("message_thread_id", Number(topicId));
       formData.append("caption", `📎 Document client (${email})`);
-      formData.append(
-        "document",
-        Buffer.from(response.data),
-        fileName || "document.pdf"
-      );
+      formData.append("document", fileBuffer, {
+        filename: fileName || "document.pdf",
+      });
 
-      await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-        formData,
-        {
-          headers: formData.getHeaders(),
-        }
-      );
+      try {
+        await axios.post(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+          formData,
+          {
+            headers: formData.getHeaders(),
+          }
+        );
+      } catch (tgErr) {
+        console.error("❌ Telegram sendDocument error:", tgErr.response?.data || tgErr.message);
+        return res.status(500).json({ success: false, error: "telegram_send_failed" });
+      }
     }
 
+    console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
     return res.json({ success: true });
   } catch (err) {
     console.error(
-      "❌ /pwa/client-send-media error:",
+      "❌ /pwa/client-send-media fatal error:",
       err.response?.data || err.message
     );
     return res.status(500).json({ success: false });
