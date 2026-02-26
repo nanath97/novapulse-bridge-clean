@@ -45,7 +45,12 @@ console.log("CLOUDINARY CONFIG CHECK:", {
   api_secret_present: !!cloudinary.config().api_secret,
 });
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20 MB
+  },
+});
 
 // =======================
 // HARD FAIL IF MISSING
