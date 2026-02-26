@@ -550,23 +550,40 @@ io.on("connection", (socket) => {
 // =======================
 // UPLOAD MEDIA → CLOUDINARY
 // =======================
+// =======================
+// UPLOAD MEDIA → CLOUDINARY (FIX PDF = RAW)
+// =======================
 app.post("/upload-media", upload.single("file"), async (req, res) => {
   console.log("🔥 /upload-media route HIT");
 
   try {
-    console.log("REQ.FILE =", !!req.file);
-
     if (!req.file) {
       return res.status(400).json({ success: false, error: "No file uploaded" });
     }
 
-    console.log("📤 Uploading media to Cloudinary...");
+    const mime = req.file.mimetype || "";
+    const originalName = req.file.originalname || "file";
+    const isPdf =
+      mime === "application/pdf" || originalName.toLowerCase().endsWith(".pdf");
+
+    // ✅ IMPORTANT:
+    // - PDF => resource_type "raw"
+    // - images/videos => "auto"
+    const resourceType = isPdf ? "raw" : "auto";
+
+    console.log("📤 Uploading to Cloudinary:", {
+      originalName,
+      mime,
+      resourceType,
+    });
 
     const uploadStream = cloudinary.uploader.upload_stream(
-  {
-    folder: "novapulse_media",
-    resource_type: "auto", // 🔥 IMPORTANT pour vidéos, pdf, audio
-  },
+      {
+        folder: "novapulse_media",
+        resource_type: resourceType,
+        use_filename: true,
+        unique_filename: true,
+      },
       (error, result) => {
         if (error) {
           console.error("❌ Cloudinary error:", error);
@@ -575,11 +592,11 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
             .json({ success: false, error: "Cloudinary upload failed" });
         }
 
-        console.log("✅ Media uploaded:", result.secure_url);
+        console.log("✅ Media uploaded:", result.secure_url, "resource_type:", result.resource_type);
 
         return res.json({
           success: true,
-          mediaUrl: result.secure_url,
+          mediaUrl: result.secure_url, // <-- pour PDF ça deviendra .../raw/upload/...
         });
       }
     );
