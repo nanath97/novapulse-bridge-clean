@@ -1025,20 +1025,27 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Vidéo client (${email})`,
         }
       );
-    } else {
-      // ✅ DOC/PDF: on envoie l’URL DIRECTE Cloudinary (SANS raw/upload)
-      console.log("📄 Sending document via direct URL:", mediaUrl, "fileName:", fileName);
+      }else {
+  // 🔥 FIX FINAL : garantir extension correcte pour Telegram
+  let finalUrl = mediaUrl;
 
-      await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-        {
-          chat_id: STAFF_GROUP_ID,
-          message_thread_id: Number(topicId),
-          document: mediaUrl,
-          caption: `📎 Document client (${email})`,
-        }
-      );
+  if (fileName && !finalUrl.includes(".")) {
+    const ext = fileName.split(".").pop();
+    finalUrl = `${mediaUrl}.${ext}`;
+  }
+
+  console.log("📄 Sending document via fixed URL:", finalUrl, "fileName:", fileName);
+
+  await axios.post(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+    {
+      chat_id: STAFF_GROUP_ID,
+      message_thread_id: Number(topicId),
+      document: finalUrl,
+      caption: `📎 Document client (${email})`,
     }
+  );
+}
 
     console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
     return res.json({ success: true });
