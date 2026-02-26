@@ -561,7 +561,7 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     const mimeType = req.file.mimetype || "";
     let resourceType = "image";
 
-    if (mimeType.startsWith("video")) {
+    if (mimeType.startsWith("video/")) {
       resourceType = "video";
     } else if (
       mimeType.includes("pdf") ||
