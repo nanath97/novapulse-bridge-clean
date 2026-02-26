@@ -988,7 +988,6 @@ app.post("/pwa/client-send-media", async (req, res) => {
 
     console.log("📥 CLIENT MEDIA → TELEGRAM:", email, mediaType, mediaUrl);
 
-    // 📸 PHOTO (URL directe OK)
     if (mediaType === "photo") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
@@ -999,10 +998,7 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Média client (${email})`,
         }
       );
-    } 
-
-    // 🎥 VIDEO (URL directe OK)
-    else if (mediaType === "video") {
+    } else if (mediaType === "video") {
       await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`,
         {
@@ -1012,35 +1008,28 @@ app.post("/pwa/client-send-media", async (req, res) => {
           caption: `📎 Vidéo client (${email})`,
         }
       );
-    } 
+    } else {
+      // ✅ DOC/PDF: on envoie l’URL DIRECTE Cloudinary (SANS raw/upload)
+      console.log("📄 Sending document via direct URL:", mediaUrl, "fileName:", fileName);
 
-    // 📄 DOCUMENT (PDF / DOC / etc.) → upload buffer (FIABLE)
-    else {
-  console.log("📄 Sending document via direct Cloudinary URL:", mediaUrl);
-
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-    {
-      chat_id: STAFF_GROUP_ID,
-      message_thread_id: Number(topicId),
-      document: mediaUrl, // 🔥 URL directe, pas modifiée
-      caption: `📎 Document client (${email})`,
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          message_thread_id: Number(topicId),
+          document: mediaUrl,
+          caption: `📎 Document client (${email})`,
+        }
+      );
     }
-  );
-}
 
     console.log("✅ CLIENT MEDIA SENT TO TELEGRAM TOPIC:", topicId);
     return res.json({ success: true });
-
   } catch (err) {
-    console.error(
-      "❌ /pwa/client-send-media error:",
-      err.response?.data || err.message
-    );
-    return res.status(500).json({ success: false });
+    console.error("❌ /pwa/client-send-media error:", err.response?.data || err.message);
+    return res.status(500).json({ success: false, error: "send_failed" });
   }
 });
-
 
 const PORT = process.env.PORT || 10000;
 
