@@ -65,8 +65,6 @@ function assertEnv() {
   if (!AIRTABLE_BASE_ID) missing.push("AIRTABLE_BASE_ID");
   if (!AIRTABLE_TABLE_PWA) missing.push("AIRTABLE_TABLE_PWA");
   if (!AIRTABLE_TABLE_PWA_MESSAGES) missing.push("AIRTABLE_TABLE_PWA_MESSAGES");
-  
-  const tablePaymentLinks = base("Payment Links");
 
   if (missing.length) {
     console.error("❌ Missing ENV:", missing.join(", "));
@@ -95,6 +93,7 @@ const io = new Server(server, {
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 const tablePWA = base(AIRTABLE_TABLE_PWA);
 const tableMessages = base(AIRTABLE_TABLE_PWA_MESSAGES);
+const tablePaymentLinks = base("Payment Links");
 
 // =======================
 // HELPERS
