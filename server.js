@@ -790,19 +790,63 @@ app.get("/pwa/history", async (req, res) => {
       return aTime - bTime; // ascendant
     });
 
-    // 3) On garde les 30 derniers
-    const last30 = records.slice(-30);
+    // =======================
+    // 4) Récupérer les paiements associés
+    // =======================
+    const paymentRecords = await tablePaymentLinks
+      .select({
+        filterByFormula: `AND({Client Key}='${safeEmail}', FIND('${safeSlug}_', {Content ID})=1)`,
+        maxRecords: 200,
+      })
+      .firstPage();
 
-    const history = last30.map((rec) => ({
+    // Mapper paiements → messages système
+    const paymentEvents = paymentRecords.map((rec) => {
+      const centsRaw = rec.fields["Amount Cents"];
+      const cents = Number(String(centsRaw ?? 0).replace(",", ".")) || 0;
+      const amount = (cents / 100).toFixed(2);
+
+      const sentAt = rec.fields["Sent At"] || null;
+
+      return {
+        text: `💳 Demande de paiement – ${amount} €`,
+        from: "admin",
+        type: "payment",
+        createdTime: sentAt || rec._rawJson?.createdTime || null,
+      };
+    });
+
+    // =======================
+    // 5) Mapper messages classiques
+    // =======================
+    const messageEvents = last30.map((rec) => ({
       text: rec.fields.text || "",
       from: rec.fields.sender === "admin" ? "admin" : "client",
       type: "text",
-      // option debug temporaire si tu veux vérifier:
-      // _ct: rec._rawJson?.createdTime,
-      // _id: rec.id,
+      createdTime: rec._rawJson?.createdTime || null,
     }));
 
-    return res.json({ success: true, history });
+    // =======================
+    // 6) Fusion timeline + tri global
+    // =======================
+    const merged = [...messageEvents, ...paymentEvents].filter(
+      (e) => e.createdTime
+    );
+
+    merged.sort((a, b) => {
+      const aTime = new Date(a.createdTime).getTime();
+      const bTime = new Date(b.createdTime).getTime();
+      return aTime - bTime;
+    });
+
+    // On garde seulement les 30 derniers événements
+    const finalHistory = merged.slice(-30);
+
+    // =======================
+    // 7) Return
+    // =======================
+    return res.json({ success: true, history: finalHistory });
+
   } catch (err) {
     console.error("❌ /pwa/history error:", err);
     return res.status(500).json({ success: false, error: err.message });
