@@ -159,22 +159,28 @@ async function findPwaClientRecord({ seller_slug, topic_id }) {
   return records[0] || null;
 }
 // =======================
-// CENTRAL NOTIFICATION HELPER
+// CENTRAL NOTIFICATION HELPER (multi-devices + missed counter)
 // =======================
 async function notifyClient(room, eventName, payload) {
   try {
-    const isActive = activeRooms.has(room);
+    const activeCount = activeRooms[room] || 0;
 
-    if (isActive) {
-      // Client en ligne → temps réel socket
+    if (activeCount > 0) {
+      // Au moins un device connecté → temps réel + son côté front
       io.to(room).emit(eventName, payload);
-      console.log(`🔔 REALTIME (${eventName}) →`, room);
+      console.log(`🔔 REALTIME (${eventName}) →`, room, "connections=", activeCount);
     } else {
-      // Client hors ligne → fallback email
-      console.log(`📧 EMAIL FALLBACK (${eventName}) →`, room);
+      // Aucun device connecté → message manqué
+      missedCounts[room] = (missedCounts[room] || 0) + 1;
 
-      // ⚠️ Pour l’instant: placeholder (pas encore d’email réel)
-      // On branchera SendGrid / Resend ensuite
+      console.log(
+        `📭 MISSED (${eventName}) →`,
+        room,
+        "count=",
+        missedCounts[room]
+      );
+
+      // (plus tard : fallback email)
     }
   } catch (err) {
     console.error("❌ notifyClient error:", err.message);
@@ -506,10 +512,13 @@ return res.sendStatus(200);
 
 
 // =======================
-// TRACK ROOMS CONNECTED (PWA ouverte ou non)
+// TRACK ROOMS CONNECTED (multi-devices)
 // =======================
-const activeRooms = new Set();
+// room -> nombre de connexions actives
+const activeRooms = Object.create(null);
 
+// Compteur de messages manqués par room
+const missedCounts = Object.create(null);
 // =======================
 // SOCKET.IO (PWA ⇄ TELEGRAM)
 // =======================
@@ -526,9 +535,9 @@ io.on("connection", (socket) => {
     const room = pwaRoom(e, s);
     socket.join(room);
 
-    activeRooms.add(room); // ← ajout propre
+    activeRooms[room] = (activeRooms[room] || 0) + 1; // ← ajout propre
 
-    console.log("✅ INIT:", e, s, "room=", room);
+    console.log("✅ INIT:", e, s, "room=", room, "connections=", activeRooms[room]);
   });
 
   // ✅ PWA → TELEGRAM (client -> staff topic)
@@ -578,9 +587,14 @@ io.on("connection", (socket) => {
       const room = pwaRoom(email, sellerSlug);
       const socketsInRoom = io.sockets.adapter.rooms.get(room);
 
-      if (!socketsInRoom || socketsInRoom.size === 0) {
-        activeRooms.delete(room);
+      if (activeRooms[room]) {
+        activeRooms[room] = Math.max(0, activeRooms[room] - 1);
+      }
+      if (activeRooms[room] === 0) {
+        delete activeRooms[room];
         console.log("📴 ROOM INACTIVE:", room);
+      } else {
+        console.log("👥 ROOM STILL ACTIVE:", room, "connections=", activeRooms[room]);
       }
     }
 
@@ -845,6 +859,35 @@ app.get("/pwa/history", async (req, res) => {
   } catch (err) {
     console.error("❌ /pwa/history error:", err);
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+// =======================
+// PWA: GET MISSED MESSAGES COUNT
+// =======================
+app.get("/pwa/missed-count", async (req, res) => {
+  try {
+    const email = normEmail(req.query.email);
+    const sellerSlug = normSlug(req.query.sellerSlug);
+
+    if (!email || !sellerSlug) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing email or sellerSlug",
+      });
+    }
+
+    const room = pwaRoom(email, sellerSlug);
+    const count = missedCounts[room] || 0;
+
+    console.log("📊 MISSED COUNT REQUEST:", room, "count=", count);
+
+    return res.json({
+      success: true,
+      missed: count,
+    });
+  } catch (err) {
+    console.error("❌ /pwa/missed-count error:", err.message);
+    return res.status(500).json({ success: false });
   }
 });
 // =======================
