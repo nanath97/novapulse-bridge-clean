@@ -750,7 +750,7 @@ app.post("/pwa/unlock", async (req, res) => {
   }
 });
 // =======================
-// PWA: GET LAST 30 MESSAGES HISTORY (robuste)
+// PWA: GET LAST 30 MESSAGES HISTORY (timeline unifiée)
 // =======================
 app.get("/pwa/history", async (req, res) => {
   try {
@@ -764,7 +764,6 @@ app.get("/pwa/history", async (req, res) => {
 
     console.log("📜 HISTORY REQUEST:", { email, sellerSlug, topicId });
 
-    // ⚠️ IMPORTANT: topic_id semble être un nombre dans Airtable
     const topicNum = Number(topicId);
     const topicFormula = Number.isFinite(topicNum)
       ? `{topic_id}=${topicNum}`
@@ -775,23 +774,31 @@ app.get("/pwa/history", async (req, res) => {
 
     const filterByFormula = `AND({email}='${safeEmail}', {seller_slug}='${safeSlug}', ${topicFormula})`;
 
-    // 1) On récupère LARGE car on ne peut pas faire confiance à created_at (vide)
-    const records = await tableMessages
+    // =======================
+    // 1) Messages classiques
+    // =======================
+    const messageRecords = await tableMessages
       .select({
         filterByFormula,
-        maxRecords: 200, // assez large pour attraper les vrais derniers
+        maxRecords: 200,
       })
       .firstPage();
 
-    // 2) On trie sur la date native Airtable: createdTime (toujours présent)
-    records.sort((a, b) => {
+    messageRecords.sort((a, b) => {
       const aTime = new Date(a._rawJson?.createdTime || 0).getTime();
       const bTime = new Date(b._rawJson?.createdTime || 0).getTime();
-      return aTime - bTime; // ascendant
+      return aTime - bTime;
     });
 
+    const messageEvents = messageRecords.map((rec) => ({
+      text: rec.fields.text || "",
+      from: rec.fields.sender === "admin" ? "admin" : "client",
+      type: "text",
+      createdTime: rec._rawJson?.createdTime || null,
+    }));
+
     // =======================
-    // 4) Récupérer les paiements associés
+    // 2) Paiements (événements système)
     // =======================
     const paymentRecords = await tablePaymentLinks
       .select({
@@ -800,34 +807,26 @@ app.get("/pwa/history", async (req, res) => {
       })
       .firstPage();
 
-    // Mapper paiements → messages système
     const paymentEvents = paymentRecords.map((rec) => {
       const centsRaw = rec.fields["Amount Cents"];
       const cents = Number(String(centsRaw ?? 0).replace(",", ".")) || 0;
       const amount = (cents / 100).toFixed(2);
 
-      const sentAt = rec.fields["Sent At"] || null;
+      const sentAt =
+        rec.fields["Sent At"] ||
+        rec._rawJson?.createdTime ||
+        null;
 
       return {
         text: `💳 Demande de paiement – ${amount} €`,
         from: "admin",
         type: "payment",
-        createdTime: sentAt || rec._rawJson?.createdTime || null,
+        createdTime: sentAt,
       };
     });
 
     // =======================
-    // 5) Mapper messages classiques
-    // =======================
-    const messageEvents = last30.map((rec) => ({
-      text: rec.fields.text || "",
-      from: rec.fields.sender === "admin" ? "admin" : "client",
-      type: "text",
-      createdTime: rec._rawJson?.createdTime || null,
-    }));
-
-    // =======================
-    // 6) Fusion timeline + tri global
+    // 3) Fusion timeline
     // =======================
     const merged = [...messageEvents, ...paymentEvents].filter(
       (e) => e.createdTime
@@ -839,20 +838,15 @@ app.get("/pwa/history", async (req, res) => {
       return aTime - bTime;
     });
 
-    // On garde seulement les 30 derniers événements
+    // On garde seulement les 30 derniers événements globaux
     const finalHistory = merged.slice(-30);
 
-    // =======================
-    // 7) Return
-    // =======================
     return res.json({ success: true, history: finalHistory });
-
   } catch (err) {
     console.error("❌ /pwa/history error:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
-
 // =======================
 // PWA: GET PAYMENT OFFERS (Pending/Paid)
 // Filtre: Client Key + (URL Render si fourni, sinon Content ID prefix sellerSlug_)
