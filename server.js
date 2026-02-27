@@ -483,7 +483,6 @@ return res.sendStatus(200);
 
 
 
-
 // =======================
 // TRACK ROOMS CONNECTED (PWA ouverte ou non)
 // =======================
@@ -505,22 +504,10 @@ io.on("connection", (socket) => {
     const room = pwaRoom(e, s);
     socket.join(room);
 
+    activeRooms.add(room); // ← ajout propre
+
     console.log("✅ INIT:", e, s, "room=", room);
   });
-  socket.on("init", ({ email, sellerSlug }) => {
-  const e = normEmail(email);
-  const s = normSlug(sellerSlug);
-
-  socket.data.email = e;
-  socket.data.sellerSlug = s;
-
-  const room = pwaRoom(e, s);
-  socket.join(room);
-
-  activeRooms.add(room); // ← AJOUT UNIQUEMENT
-
-  console.log("✅ INIT:", e, s, "room=", room);
-});
 
   // ✅ PWA → TELEGRAM (client -> staff topic)
   socket.on("client_message", async ({ text }) => {
@@ -562,24 +549,21 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    const email = socket.data.email;
+    const sellerSlug = socket.data.sellerSlug;
+
+    if (email && sellerSlug) {
+      const room = pwaRoom(email, sellerSlug);
+      const socketsInRoom = io.sockets.adapter.rooms.get(room);
+
+      if (!socketsInRoom || socketsInRoom.size === 0) {
+        activeRooms.delete(room);
+        console.log("📴 ROOM INACTIVE:", room);
+      }
+    }
+
     console.log("❌ PWA disconnected:", socket.id);
   });
-});
-socket.on("disconnect", () => {
-  const email = socket.data.email;
-  const sellerSlug = socket.data.sellerSlug;
-
-  if (email && sellerSlug) {
-    const room = pwaRoom(email, sellerSlug);
-    const socketsInRoom = io.sockets.adapter.rooms.get(room);
-
-    if (!socketsInRoom || socketsInRoom.size === 0) {
-      activeRooms.delete(room);
-      console.log("📴 ROOM INACTIVE:", room);
-    }
-  }
-
-  console.log("❌ PWA disconnected:", socket.id);
 });
 
 // =======================
