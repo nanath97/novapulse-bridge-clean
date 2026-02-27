@@ -23,7 +23,7 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
 const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
-const tablePaymentLinks = base("Payment Links");
+
 const FormData = require("form-data");
 
 const multer = require("multer");
@@ -65,6 +65,8 @@ function assertEnv() {
   if (!AIRTABLE_BASE_ID) missing.push("AIRTABLE_BASE_ID");
   if (!AIRTABLE_TABLE_PWA) missing.push("AIRTABLE_TABLE_PWA");
   if (!AIRTABLE_TABLE_PWA_MESSAGES) missing.push("AIRTABLE_TABLE_PWA_MESSAGES");
+  
+  const tablePaymentLinks = base("Payment Links");
 
   if (missing.length) {
     console.error("❌ Missing ENV:", missing.join(", "));
