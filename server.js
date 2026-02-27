@@ -709,7 +709,7 @@ app.post("/pwa/unlock", async (req, res) => {
   }
 });
 // =======================
-// PWA: GET LAST 30 MESSAGES HISTORY
+// PWA: GET LAST 30 MESSAGES HISTORY (robuste)
 // =======================
 app.get("/pwa/history", async (req, res) => {
   try {
@@ -721,37 +721,52 @@ app.get("/pwa/history", async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing params" });
     }
 
-    console.log("📜 HISTORY REQUEST:", email, sellerSlug, topicId);
+    console.log("📜 HISTORY REQUEST:", { email, sellerSlug, topicId });
 
+    // ⚠️ IMPORTANT: topic_id semble être un nombre dans Airtable
+    const topicNum = Number(topicId);
+    const topicFormula = Number.isFinite(topicNum)
+      ? `{topic_id}=${topicNum}`
+      : `{topic_id}='${topicId.replace(/'/g, "\\'")}'`;
+
+    const safeEmail = email.replace(/'/g, "\\'");
+    const safeSlug = sellerSlug.replace(/'/g, "\\'");
+
+    const filterByFormula = `AND({email}='${safeEmail}', {seller_slug}='${safeSlug}', ${topicFormula})`;
+
+    // 1) On récupère LARGE car on ne peut pas faire confiance à created_at (vide)
     const records = await tableMessages
       .select({
-        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}', {topic_id}='${topicId}')`,
-        sort: [{ field: "created_at", direction: "desc" }],
-        maxRecords: 30,
+        filterByFormula,
+        maxRecords: 200, // assez large pour attraper les vrais derniers
       })
       .firstPage();
-    // fallback tri JS si created_at vide
+
+    // 2) On trie sur la date native Airtable: createdTime (toujours présent)
     records.sort((a, b) => {
-      const dateA = a.fields.created_at ? new Date(a.fields.created_at) : new Date(a._rawJson.createdTime);
-      const dateB = b.fields.created_at ? new Date(b.fields.created_at) : new Date(b._rawJson.createdTime);
-      return dateB - dateA;
+      const aTime = new Date(a._rawJson?.createdTime || 0).getTime();
+      const bTime = new Date(b._rawJson?.createdTime || 0).getTime();
+      return aTime - bTime; // ascendant
     });
 
-    const history = records
-      .reverse()
-      .map((rec) => ({
-        text: rec.fields.text || "",
-        from: rec.fields.sender === "admin" ? "admin" : "client",
-        type: "text",
-      }));
+    // 3) On garde les 30 derniers
+    const last30 = records.slice(-30);
+
+    const history = last30.map((rec) => ({
+      text: rec.fields.text || "",
+      from: rec.fields.sender === "admin" ? "admin" : "client",
+      type: "text",
+      // option debug temporaire si tu veux vérifier:
+      // _ct: rec._rawJson?.createdTime,
+      // _id: rec.id,
+    }));
 
     return res.json({ success: true, history });
   } catch (err) {
-    console.error("❌ /pwa/history error:", err.message);
-    return res.status(500).json({ success: false });
+    console.error("❌ /pwa/history error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
-
 // =======================
 // GET TOPIC ID FOR PWA
 // =======================
