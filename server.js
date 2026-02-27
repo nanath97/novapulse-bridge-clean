@@ -23,6 +23,7 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
 const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
+const tablePaymentLinks = base("Payment Links");
 const FormData = require("form-data");
 
 const multer = require("multer");
@@ -769,23 +770,40 @@ app.get("/pwa/history", async (req, res) => {
 });
 
 // =======================
-// PWA: GET PAYMENT OFFERS (Pending/Paid) for client + vendor (URL Render)
+// PWA: GET PAYMENT OFFERS (Pending/Paid)
+// Filtre: Client Key + (URL Render si fourni, sinon Content ID prefix sellerSlug_)
 // =======================
 app.get("/pwa/payments", async (req, res) => {
   try {
     const email = normEmail(req.query.email);
-    const urlRender = String(req.query.urlRender || "").trim();
+    const sellerSlug = normSlug(req.query.sellerSlug); // ex: coach-matthieu
+    const urlRender = String(req.query.urlRender || "").trim(); // optionnel
 
-    if (!email || !urlRender) {
-      return res.status(400).json({ success: false, error: "Missing params: email, urlRender" });
+    if (!email || !sellerSlug) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing params: email, sellerSlug",
+      });
     }
 
     const safeEmail = email.replace(/'/g, "\\'");
+    const safeSeller = sellerSlug.replace(/'/g, "\\'");
     const safeUrl = urlRender.replace(/'/g, "\\'");
 
-    const filterByFormula = `AND({Client Key}='${safeEmail}', {URL Render}='${safeUrl}')`;
+    // Si urlRender est fourni -> filtre le plus fiable
+    // Sinon -> on se base sur Content ID: "sellerSlug_..."
+    const vendorFormula = urlRender
+      ? `{URL Render}='${safeUrl}'`
+      : `FIND('${safeSeller}_', {Content ID})=1`;
 
-    console.log("💳 PAYMENTS REQUEST:", { email, urlRender, filterByFormula });
+    const filterByFormula = `AND({Client Key}='${safeEmail}', ${vendorFormula})`;
+
+    console.log("💳 PAYMENTS REQUEST:", {
+      email,
+      sellerSlug,
+      urlRender: urlRender || null,
+      filterByFormula,
+    });
 
     const records = await tablePaymentLinks
       .select({
@@ -799,7 +817,9 @@ app.get("/pwa/payments", async (req, res) => {
       const centsRaw = rec.fields["Amount Cents"];
       const cents = Number(String(centsRaw ?? 0).replace(",", ".")) || 0;
 
-      const status = String(rec.fields["Status"] || "").toLowerCase().trim() || "pending";
+      const status = String(rec.fields["Status"] || "")
+        .toLowerCase()
+        .trim() || "pending";
 
       return {
         id: rec.id,
@@ -807,15 +827,16 @@ app.get("/pwa/payments", async (req, res) => {
         amount_cents: cents,
         amount_eur: (cents / 100).toFixed(2),
 
-        status,                 // paid | pending
+        status, // paid | pending
         sent_at: rec.fields["Sent At"] || null,
         paid_at: rec.fields["Paid At"] || null,
 
         payment_link_url: rec.fields["Payment Link URL"] || null,
 
-        // debug/optionnel
+        // debug utile
         content_id: rec.fields["Content ID"] || null,
         checkout_session_id: rec.fields["Checkout Session ID"] || null,
+        url_render: rec.fields["URL Render"] || null,
       };
     });
 
