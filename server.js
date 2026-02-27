@@ -561,12 +561,13 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     const mimeType = req.file.mimetype || "";
     let resourceType = "image";
 
-    if (mimeType.startsWith("video/")) {
+    if (mimeType.startsWith("video")) {
       resourceType = "video";
     } else if (
       mimeType.includes("pdf") ||
       mimeType.includes("msword") ||
-      mimeType.includes("officedocument")
+      mimeType.includes("officedocument") ||
+      mimeType.includes("application")
     ) {
       resourceType = "raw";
     }
@@ -729,6 +730,12 @@ app.get("/pwa/history", async (req, res) => {
         maxRecords: 30,
       })
       .firstPage();
+    // fallback tri JS si created_at vide
+    records.sort((a, b) => {
+      const dateA = a.fields.created_at ? new Date(a.fields.created_at) : new Date(a._rawJson.createdTime);
+      const dateB = b.fields.created_at ? new Date(b.fields.created_at) : new Date(b._rawJson.createdTime);
+      return dateB - dateA;
+    });
 
     const history = records
       .reverse()
