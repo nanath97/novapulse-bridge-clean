@@ -158,6 +158,28 @@ async function findPwaClientRecord({ seller_slug, topic_id }) {
 
   return records[0] || null;
 }
+// =======================
+// CENTRAL NOTIFICATION HELPER
+// =======================
+async function notifyClient(room, eventName, payload) {
+  try {
+    const isActive = activeRooms.has(room);
+
+    if (isActive) {
+      // Client en ligne → temps réel socket
+      io.to(room).emit(eventName, payload);
+      console.log(`🔔 REALTIME (${eventName}) →`, room);
+    } else {
+      // Client hors ligne → fallback email
+      console.log(`📧 EMAIL FALLBACK (${eventName}) →`, room);
+
+      // ⚠️ Pour l’instant: placeholder (pas encore d’email réel)
+      // On branchera SendGrid / Resend ensuite
+    }
+  } catch (err) {
+    console.error("❌ notifyClient error:", err.message);
+  }
+}
 
 // =======================
 // NOTES PERSISTANTES (PWA)
@@ -383,7 +405,7 @@ if (
       text,
     });
 
-    io.to(room).emit("admin_message", {
+    await notifyClient(room, "admin_message", {
       text,
       from: "admin",
     });
