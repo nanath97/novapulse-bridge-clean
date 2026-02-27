@@ -767,6 +767,67 @@ app.get("/pwa/history", async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// =======================
+// PWA: GET PAYMENT OFFERS (Pending/Paid) for client + vendor (URL Render)
+// =======================
+app.get("/pwa/payments", async (req, res) => {
+  try {
+    const email = normEmail(req.query.email);
+    const urlRender = String(req.query.urlRender || "").trim();
+
+    if (!email || !urlRender) {
+      return res.status(400).json({ success: false, error: "Missing params: email, urlRender" });
+    }
+
+    const safeEmail = email.replace(/'/g, "\\'");
+    const safeUrl = urlRender.replace(/'/g, "\\'");
+
+    const filterByFormula = `AND({Client Key}='${safeEmail}', {URL Render}='${safeUrl}')`;
+
+    console.log("💳 PAYMENTS REQUEST:", { email, urlRender, filterByFormula });
+
+    const records = await tablePaymentLinks
+      .select({
+        filterByFormula,
+        sort: [{ field: "Sent At", direction: "desc" }],
+        maxRecords: 200,
+      })
+      .firstPage();
+
+    const items = records.map((rec) => {
+      const centsRaw = rec.fields["Amount Cents"];
+      const cents = Number(String(centsRaw ?? 0).replace(",", ".")) || 0;
+
+      const status = String(rec.fields["Status"] || "").toLowerCase().trim() || "pending";
+
+      return {
+        id: rec.id,
+        caption: rec.fields["Caption"] || "",
+        amount_cents: cents,
+        amount_eur: (cents / 100).toFixed(2),
+
+        status,                 // paid | pending
+        sent_at: rec.fields["Sent At"] || null,
+        paid_at: rec.fields["Paid At"] || null,
+
+        payment_link_url: rec.fields["Payment Link URL"] || null,
+
+        // debug/optionnel
+        content_id: rec.fields["Content ID"] || null,
+        checkout_session_id: rec.fields["Checkout Session ID"] || null,
+      };
+    });
+
+    const pending = items.filter((x) => x.status === "pending");
+    const paid = items.filter((x) => x.status === "paid");
+
+    return res.json({ success: true, pending, paid, all: items });
+  } catch (err) {
+    console.error("❌ /pwa/payments error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 // =======================
 // GET TOPIC ID FOR PWA
 // =======================
