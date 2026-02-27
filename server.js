@@ -771,11 +771,19 @@ app.get("/pwa/history", async (req, res) => {
     const email = normEmail(req.query.email);
     const sellerSlug = normSlug(req.query.sellerSlug);
     const topicId = String(req.query.topicId || "").trim();
+    
 
     if (!email || !sellerSlug || !topicId) {
       return res.status(400).json({ success: false, error: "Missing params" });
     }
+    const room = pwaRoom(email, sellerSlug);
 
+    // 🔄 Reset compteur de messages manqués dès chargement historique
+    if (missedCounts[room]) {
+      console.log("🔁 RESET MISSED COUNT:", room, "old=", missedCounts[room]);
+      missedCounts[room] = 0;
+    }
+    
     console.log("📜 HISTORY REQUEST:", { email, sellerSlug, topicId });
 
     const topicNum = Number(topicId);
