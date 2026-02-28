@@ -446,6 +446,15 @@ if (
         text: message.caption || "",
         from: "admin",
       });
+      pushPwaHistory(room, {
+        from: "admin",
+        type: "media",
+        mediaType: "photo",
+        url: fileUrl,
+        fileName: "photo",
+        text: message.caption || "",
+      });
+      console.log("🧠 HISTORY +1 admin PHOTO →", room);
 
       console.log("📸 Admin PHOTO + caption → PWA:", room);
     }
@@ -471,6 +480,15 @@ if (
       text: message.caption || "",
       from: "admin",
     });
+    pushPwaHistory(room, {
+      from: "admin",
+      type: "media",
+      mediaType: "video",
+      url: fileUrl,
+      fileName: message.video.file_name || "video",
+      text: message.caption || "",
+    });
+    console.log("🧠 HISTORY +1 admin VIDEO →", room);
 
     console.log("🎥 Admin VIDEO + caption → PWA:", room);
   }
@@ -497,6 +515,15 @@ if (
       text: message.caption || "",
       from: "admin",
     });
+    pushPwaHistory(room, {
+      from: "admin",
+      type: "media",
+      mediaType: "document",
+      url: fileUrl,
+      fileName,
+      text: message.caption || "",
+    });
+    console.log("🧠 HISTORY +1 admin DOCUMENT →", room);
 
     console.log("📄 Admin DOCUMENT + caption → PWA:", room);
   }
@@ -662,6 +689,26 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     return res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
+// =======================
+// PERSISTENT HISTORY (TEXT + MEDIA)
+// =======================
+const pwaHistoryStore = {}; 
+// clé = room ("pwa:seller:email"), valeur = array de messages
+
+function pushPwaHistory(room, msg) {
+  if (!room) return;
+  if (!pwaHistoryStore[room]) pwaHistoryStore[room] = [];
+
+  pwaHistoryStore[room].push({
+    ...msg,
+    ts: Date.now(), // timestamp unique serveur
+  });
+
+  // garde une taille raisonnable (ex: 300 derniers)
+  if (pwaHistoryStore[room].length > 300) {
+    pwaHistoryStore[room] = pwaHistoryStore[room].slice(-300);
+  }
+}
 // =======================
 // PWA: SEND PAID CONTENT (BLUR + CHECKOUT)
 // =======================
