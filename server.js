@@ -666,11 +666,21 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
 // PWA: SEND PAID CONTENT (BLUR + CHECKOUT)
 // =======================
 const pendingPaidContent = {}; // mémoire temporaire (phase test validée)
+const contentMediaStore = {}; 
+// clé = contentId, valeur = { mediaUrl, mediaType, fileName }
 
 app.post("/pwa/send-paid-content", async (req, res) => {
   try {
     const { email, sellerSlug, text, checkout_url, mediaUrl, amount, isMedia } =
       req.body;
+      // Sauvegarde persistante du média par contentId
+    if (contentId && mediaUrl) {
+      contentMediaStore[contentId] = {
+        mediaUrl,
+        mediaType,
+        fileName,
+      };
+    }
 
     const room = pwaRoom(email, sellerSlug);
 
@@ -694,6 +704,25 @@ app.post("/pwa/send-paid-content", async (req, res) => {
   } catch (err) {
     console.error("❌ /pwa/send-paid-content error:", err.message);
     return res.status(500).json({ success: false });
+  }
+});
+
+app.get("/pwa/content", async (req, res) => {
+  try {
+    const { contentId } = req.query;
+    if (!contentId) {
+      return res.status(400).json({ error: "Missing contentId" });
+    }
+
+    const media = contentMediaStore[contentId];
+    if (!media) {
+      return res.json({ success: false, reason: "media_not_found" });
+    }
+
+    res.json({ success: true, media });
+  } catch (err) {
+    console.error("❌ Error fetching content media:", err);
+    res.status(500).json({ error: "Internal error" });
   }
 });
 // =======================
