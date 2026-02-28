@@ -671,8 +671,10 @@ const contentMediaStore = {};
 
 app.post("/pwa/send-paid-content", async (req, res) => {
   try {
-    const { email, sellerSlug, text, checkout_url, mediaUrl, amount, isMedia } =
+    const { email, sellerSlug, text, checkout_url, mediaUrl, mediaType, fileName, contentId, amount, isMedia } =
       req.body;
+      console.log("🧾 Payload reçu:", req.body);
+      console.log("🔑 contentId reçu:", contentId);
       // Sauvegarde persistante du média par contentId
     if (contentId && mediaUrl) {
       contentMediaStore[contentId] = {
@@ -680,6 +682,7 @@ app.post("/pwa/send-paid-content", async (req, res) => {
         mediaType,
         fileName,
       };
+      console.log("📦 Stored media for contentId:", contentId);
     }
 
     const room = pwaRoom(email, sellerSlug);
