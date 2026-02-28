@@ -1333,6 +1333,25 @@ app.post("/pwa/send-admin-media", async (req, res) => {
     const { email, sellerSlug, text, mediaUrl, mediaType } = req.body;
 
     const room = pwaRoom(email, sellerSlug);
+    // 🔥 Persistance mémoire des médias admin (groupé / programmé / direct)
+    if (!pwaHistoryStore[room]) {
+      pwaHistoryStore[room] = [];
+    }
+
+    pwaHistoryStore[room].push({
+      from: "admin",
+      type: "media",
+      mediaType: mediaType,
+      url: mediaUrl,
+      fileName: mediaUrl?.split("/").pop(),
+      text: text || "",
+      ts: Date.now(),
+    });
+
+    // Limite sécurité (évite mémoire infinie)
+    if (pwaHistoryStore[room].length > 100) {
+      pwaHistoryStore[room] = pwaHistoryStore[room].slice(-100);
+    }
 
     console.log("🖼️ SEND ADMIN MEDIA →", room, mediaUrl, text, mediaType);
 
