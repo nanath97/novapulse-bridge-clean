@@ -1169,11 +1169,27 @@ app.post("/pwa/send-admin-message", async (req, res) => {
   try {
     const { email, sellerSlug, text } = req.body;
 
-    const room = pwaRoom(email, sellerSlug);
+    const e = normEmail(email);
+    const s = normSlug(sellerSlug);
+    const room = pwaRoom(e, s);
 
     console.log("📩 SEND ADMIN MESSAGE →", room, text);
 
-    io.to(room).emit("admin_message", {
+    // 1️⃣ Trouver le topic_id pour stockage historique
+    const topicId = await findTopicIdByEmailSlug(e, s);
+
+    if (topicId) {
+      await tableMessages.create({
+        email: e,
+        seller_slug: s,
+        topic_id: topicId,
+        sender: "admin",
+        text,
+      });
+    }
+
+    // 2️⃣ Utiliser le helper central (gère online + offline + badge)
+    await notifyClient(room, "admin_message", {
       text,
       from: "admin",
     });
