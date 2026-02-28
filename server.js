@@ -958,9 +958,24 @@ app.get("/pwa/history", async (req, res) => {
     // =======================
     // 3) Fusion timeline
     // =======================
-    const merged = [...messageEvents, ...paymentEvents].filter(
-      (e) => e.createdTime
-    );
+    // =======================
+    // Médias persistés en mémoire
+    // =======================
+    const memoryMedia = (pwaHistoryStore[room] || []).map((m) => ({
+      text: m.text || "",
+      from: m.from || "admin",
+      type: "media",
+      mediaType: m.mediaType,
+      url: m.url,
+      fileName: m.fileName,
+      createdTime: new Date(m.ts).toISOString(),
+    }));
+
+    const merged = [
+      ...messageEvents,
+      ...paymentEvents,
+      ...memoryMedia,
+    ].filter((e) => e.createdTime);
 
     merged.sort((a, b) => {
       const aTime = new Date(a.createdTime).getTime();
