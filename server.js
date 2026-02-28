@@ -763,6 +763,35 @@ app.post("/pwa/unlock", async (req, res) => {
     return res.status(500).json({ success: false });
   }
 });
+
+
+app.get("/pwa/purchases", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: "Missing email" });
+    }
+
+    const filterFormula = `AND({Client Key}="${email}", {Status}="Paid")`;
+
+    const records = await base("Payment Links")
+      .select({ filterByFormula: filterFormula })
+      .all();
+
+    const purchases = records.map(r => ({
+      content_id: r.fields["Content ID"],
+      paid_at: r.fields["Paid At"],
+      amount_cents: r.fields["Amount Cents"],
+      checkout_session_id: r.fields["Checkout Session ID"],
+      caption: r.fields["Caption"] || null
+    }));
+
+    res.json({ success: true, purchases });
+  } catch (err) {
+    console.error("❌ Error fetching purchases:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
 // =======================
 // PWA: GET LAST 30 MESSAGES HISTORY (timeline unifiée)
 // =======================
@@ -1162,6 +1191,8 @@ app.post("/api/pwa/note", async (req, res) => {
     return res.status(500).json({ error: "internal_error" });
   }
 });
+
+
 // =======================
 // PWA: SEND SYSTEM ADMIN MESSAGE (POST PAYMENT CONFIRMATION)
 // =======================
