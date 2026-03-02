@@ -175,7 +175,7 @@ async function sendEmailNotification(toEmail, messageText) {
 
   try {
     await mailTransporter.sendMail({
-      from: `"NovaPlus" <${SMTP_EMAIL}>`,
+      from: `"NovaPulse" <${SMTP_EMAIL}>`,
       to: toEmail,
       subject: "Nouveau message reçu",
       text: `Vous avez reçu un nouveau message :\n\n${messageText}\n\nReconnectez-vous à votre espace pour répondre.`,
