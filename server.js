@@ -191,31 +191,25 @@ async function sendEmailNotification(toEmail, messageText) {
 // =======================
 async function notifyClient(room, eventName, payload) {
   try {
+
+    console.log("=======================================");
+    console.log("📡 notifyClient CALLED");
+    console.log("📌 EVENT NAME:", eventName);
+    console.log("📌 ROOM TARGET:", room);
+    console.log("📌 ACTIVE ROOMS OBJECT:", activeRooms);
+    console.log("📌 ACTIVE COUNT FOR ROOM:", activeRooms[room]);
+    console.log("=======================================");
+
     const activeCount = activeRooms[room] || 0;
 
     if (activeCount > 0) {
-      // Au moins un device connecté → temps réel + son côté front
+      console.log("✅ REALTIME EMIT TRIGGERED");
       io.to(room).emit(eventName, payload);
-      console.log(`🔔 REALTIME (${eventName}) →`, room, "connections=", activeCount);
     } else {
-  // Aucun device connecté → message manqué
-  missedCounts[room] = (missedCounts[room] || 0) + 1;
+      console.log("⚠️ NO ACTIVE CONNECTION FOR ROOM");
+      missedCounts[room] = (missedCounts[room] || 0) + 1;
+    }
 
-  console.log(
-    `📭 MISSED (${eventName}) →`,
-    room,
-    "count=",
-    missedCounts[room]
-  );
-
-  // 🔥 FALLBACK EMAIL
-  const parts = room.split(":"); // format: pwa:seller:email
-  const email = parts[2];
-
-  if (email && payload?.text) {
-    await sendEmailNotification(email, payload.text);
-  }
-}
   } catch (err) {
     console.error("❌ notifyClient error:", err.message);
   }
