@@ -5,6 +5,7 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const axios = require("axios");
 const Airtable = require("airtable");
+const nodemailer = require("nodemailer");
 
 console.log("🔥 SERVER.JS BRIDGE LOADED");
 
@@ -23,6 +24,16 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_PWA = process.env.AIRTABLE_TABLE_PWA;
 const AIRTABLE_TABLE_PWA_MESSAGES = process.env.AIRTABLE_TABLE_PWA_MESSAGES;
+const SMTP_EMAIL = process.env.SMTP_EMAIL;
+const SMTP_PASS = process.env.SMTP_PASS;
+
+const mailTransporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: SMTP_EMAIL,
+    pass: SMTP_PASS,
+  },
+});
 
 const FormData = require("form-data");
 
@@ -158,6 +169,23 @@ async function findPwaClientRecord({ seller_slug, topic_id }) {
 
   return records[0] || null;
 }
+
+async function sendEmailNotification(toEmail, messageText) {
+  if (!SMTP_EMAIL || !SMTP_PASS || !toEmail) return;
+
+  try {
+    await mailTransporter.sendMail({
+      from: `"NovaPlus" <${SMTP_EMAIL}>`,
+      to: toEmail,
+      subject: "Nouveau message reçu",
+      text: `Vous avez reçu un nouveau message :\n\n${messageText}\n\nReconnectez-vous à votre espace pour répondre.`,
+    });
+
+    console.log("📧 Email envoyé à", toEmail);
+  } catch (err) {
+    console.error("❌ Email error:", err.message);
+  }
+}
 // =======================
 // CENTRAL NOTIFICATION HELPER (multi-devices + missed counter)
 // =======================
@@ -170,18 +198,24 @@ async function notifyClient(room, eventName, payload) {
       io.to(room).emit(eventName, payload);
       console.log(`🔔 REALTIME (${eventName}) →`, room, "connections=", activeCount);
     } else {
-      // Aucun device connecté → message manqué
-      missedCounts[room] = (missedCounts[room] || 0) + 1;
+  // Aucun device connecté → message manqué
+  missedCounts[room] = (missedCounts[room] || 0) + 1;
 
-      console.log(
-        `📭 MISSED (${eventName}) →`,
-        room,
-        "count=",
-        missedCounts[room]
-      );
+  console.log(
+    `📭 MISSED (${eventName}) →`,
+    room,
+    "count=",
+    missedCounts[room]
+  );
 
-      // (plus tard : fallback email)
-    }
+  // 🔥 FALLBACK EMAIL
+  const parts = room.split(":"); // format: pwa:seller:email
+  const email = parts[2];
+
+  if (email && payload?.text) {
+    await sendEmailNotification(email, payload.text);
+  }
+}
   } catch (err) {
     console.error("❌ notifyClient error:", err.message);
   }
