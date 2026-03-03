@@ -125,6 +125,28 @@ function escapeAirtableString(str) {
   return String(str || "").replace(/"/g, '\\"');
 }
 
+function inferMediaMeta(mediaUrl, fallbackName = "") {
+  const url = String(mediaUrl || "");
+  const name = String(fallbackName || "");
+
+  // 1) type
+  let mediaType = null;
+  if (url.includes("/video/upload/") || url.includes("/video/")) mediaType = "video";
+  else if (url.includes("/raw/upload/") || url.includes("/raw/")) mediaType = "document";
+  else mediaType = "photo";
+
+  // 2) fileName
+  let fileName = name || url.split("/").pop() || "";
+
+  // Cloudinary raw URLs n'ont pas toujours d'extension -> on force un .pdf par défaut
+  if (mediaType === "document") {
+    const hasExt = /\.[a-z0-9]{2,5}$/i.test(fileName);
+    if (!hasExt) fileName = "document.pdf";
+  }
+
+  return { mediaType, fileName };
+}
+
 async function tgSendMessage({ text, message_thread_id, reply_markup }) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   return axios.post(url, {
@@ -771,12 +793,15 @@ app.post("/pwa/send-paid-content", async (req, res) => {
       req.body;
       console.log("🧾 Payload reçu:", req.body);
       console.log("🔑 contentId reçu:", contentId);
+
+
       // Sauvegarde persistante du média par contentId
     if (contentId && mediaUrl) {
+      const meta = inferMediaMeta(mediaUrl, fileName);
       contentMediaStore[contentId] = {
         mediaUrl,
-        mediaType,
-        fileName,
+        mediaType: mediaType || meta.mediaType,
+        fileName: fileName || meta.fileName,
       };
       console.log("📦 Stored media for contentId:", contentId);
     }
@@ -883,11 +908,12 @@ app.post("/pwa/unlock", async (req, res) => {
 
 
     const stored = contentId ? contentMediaStore[contentId] : null;
+    const meta = inferMediaMeta(stored?.mediaUrl || pending.mediaUrl, stored?.fileName);
 
     io.to(room).emit("paid_content_unlocked", {
       mediaUrl: stored?.mediaUrl || pending.mediaUrl,
-      mediaType: stored?.mediaType || null,
-      fileName: stored?.fileName || null,
+      mediaType: stored?.mediaType || meta.mediaType,
+      fileName: stored?.fileName || meta.fileName,
       amount: pending.amount,
       contentId,
     });
