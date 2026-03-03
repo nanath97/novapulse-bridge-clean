@@ -859,13 +859,18 @@ app.post("/pwa/unlock", async (req, res) => {
 
     const room = pwaRoom(email, sellerSlug);
 
-    console.log("🔓 UNLOCK REQUEST:", {
-      email,
+    console.log("🔓 UNLOCK REQUEST:",  {
+    
       sellerSlug,
       contentId,
       sessionId,
       room,
     });
+    
+    console.log("🧠 contentMediaStore keys sample:", Object.keys(contentMediaStore).slice(0, 5));
+    console.log("🧠 contentMediaStore lookup:", contentId, contentMediaStore?.[contentId]);
+
+
 
     const pending = pendingPaidContent[room];
 
