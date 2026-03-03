@@ -276,7 +276,49 @@ app.get("/success", (req, res) => {
 app.get("/cancel", (req, res) => {
   res.status(200).send("❌ Paiement annulé. Tu peux fermer cette page et réessayer.");
 });
+app.get("/pwa/download", async (req, res) => {
+  try {
+    const fileUrl = String(req.query.url || "").trim();
+    const name = String(req.query.name || "document.pdf").trim();
 
+    if (!fileUrl) return res.status(400).send("Missing url");
+
+    // sécurité minimale: n'autorise QUE Cloudinary
+    if (!fileUrl.includes("res.cloudinary.com/")) {
+      return res.status(403).send("Forbidden");
+    }
+
+    // Nom safe
+    const safeName = name
+      .replace(/[\/\\?%*:|"<>]/g, "_")
+      .slice(0, 120) || "document.pdf";
+
+    const resp = await axios.get(fileUrl, {
+      responseType: "stream",
+      timeout: 30000,
+      validateStatus: () => true,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+
+    if (resp.status !== 200) {
+      console.log("❌ download proxy failed status:", resp.status);
+      return res.status(502).send("Download failed");
+    }
+
+    // Content-Type: si Cloudinary donne un type, on le garde, sinon fallback PDF
+    const ct = (resp.headers?.["content-type"] || "").toLowerCase();
+    const contentType = ct || "application/pdf";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+    res.setHeader("Cache-Control", "no-store");
+
+    resp.data.pipe(res);
+  } catch (e) {
+    console.error("❌ /pwa/download error:", e?.message);
+    res.status(500).send("Internal error");
+  }
+});
 // =======================
 // TELEGRAM → PWA (admin -> client) + CALLBACKS
 // Telegram webhook points here
