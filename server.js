@@ -40,6 +40,7 @@ const FormData = require("form-data");
 const multer = require("multer");
 const streamifier = require("streamifier");
 const cloudinary = require("cloudinary").v2;
+const path = require("path");
 
 if (process.env.CLOUDINARY_URL) {
   cloudinary.config(process.env.CLOUDINARY_URL);
@@ -660,6 +661,7 @@ io.on("connection", (socket) => {
 // =======================
 // UPLOAD MEDIA → CLOUDINARY
 // =======================
+
 app.post("/upload-media", upload.single("file"), async (req, res) => {
   console.log("🔥 /upload-media route HIT");
 
@@ -669,6 +671,13 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     }
 
     const mimeType = req.file.mimetype || "";
+    const originalName = req.file.originalname || "file";
+    const ext = path.extname(originalName).replace(".", "").toLowerCase(); // ex: "pdf"
+    const baseName = path
+      .basename(originalName, path.extname(originalName))
+      .replace(/[^\w\-]+/g, "_")
+      .slice(0, 60);
+
     let resourceType = "image";
 
     if (mimeType.startsWith("video")) {
@@ -685,6 +694,18 @@ app.post("/upload-media", upload.single("file"), async (req, res) => {
     console.log("📦 Upload type detected:", mimeType, "→", resourceType);
     console.log("📎 originalname:", req.file.originalname);
 
+
+
+    const uploadOpts = {
+      folder: "novapulse_media",
+      resource_type: resourceType,
+    };
+
+    // 🔥 Si c’est un RAW (pdf, doc, etc.), on force un nom + format
+    if (resourceType === "raw") {
+      uploadOpts.public_id = `${baseName}_${Date.now()}`;
+      if (ext) uploadOpts.format = ext; // ex: "pdf"
+    }
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "novapulse_media",
@@ -855,11 +876,17 @@ app.post("/pwa/unlock", async (req, res) => {
 
     console.log("📦 Unlocking media:", pending.mediaUrl);
 
+
+    const stored = contentId ? contentMediaStore[contentId] : null;
+
     io.to(room).emit("paid_content_unlocked", {
-      mediaUrl: pending.mediaUrl,
+      mediaUrl: stored?.mediaUrl || pending.mediaUrl,
+      mediaType: stored?.mediaType || null,
+      fileName: stored?.fileName || null,
       amount: pending.amount,
       contentId,
     });
+    
 
     // nettoyage mémoire
     delete pendingPaidContent[room];
