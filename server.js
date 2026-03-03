@@ -1092,7 +1092,7 @@ app.get("/pwa/history", async (req, res) => {
         filterByFormula,
         maxRecords: 200,
       })
-      .firstPage();
+      .all();
 
     messageRecords.sort((a, b) => {
       const aTime = new Date(a._rawJson?.createdTime || 0).getTime();
