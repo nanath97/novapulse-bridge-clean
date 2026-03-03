@@ -660,7 +660,8 @@ const missedCounts = Object.create(null);
 // room -> true (visible) / false (invisible)
 const roomVisibility = Object.create(null);
 
-
+// Dernière activité utilisateur par room (timestamp)
+const lastActivity = Object.create(null);
 
 // =======================
 // SOCKET.IO (PWA ⇄ TELEGRAM)
@@ -679,7 +680,7 @@ io.on("connection", (socket) => {
     socket.join(room);
 
     activeRooms[room] = (activeRooms[room] || 0) + 1; // ← ajout propre
-
+    lastActivity[room] = Date.now();
     console.log("✅ INIT:", e, s, "room=", room, "connections=", activeRooms[room]);
   });
 // 👁️ PWA → SERVER : visibilité (mobile background / app hidden)
@@ -694,7 +695,17 @@ io.on("connection", (socket) => {
 
     console.log("👁 VISIBILITY:", room, "visible=", roomVisibility[room]);
   });
+  // 💓 Heartbeat : activité continue PWA
+  socket.on("heartbeat", () => {
+    const email = socket.data.email;
+    const sellerSlug = socket.data.sellerSlug;
+    if (!email || !sellerSlug) return;
 
+    const room = pwaRoom(email, sellerSlug);
+    lastActivity[room] = Date.now();
+
+    console.log("💓 HEARTBEAT:", room);
+  });
 
   // ✅ PWA → TELEGRAM (client -> staff topic)
   socket.on("client_message", async ({ text }) => {
