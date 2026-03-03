@@ -639,6 +639,15 @@ const activeRooms = Object.create(null);
 
 // Compteur de messages manqués par room
 const missedCounts = Object.create(null);
+
+// =======================
+// PWA VISIBILITY (visible / invisible)
+// =======================
+// room -> true (visible) / false (invisible)
+const roomVisibility = Object.create(null);
+
+
+
 // =======================
 // SOCKET.IO (PWA ⇄ TELEGRAM)
 // =======================
@@ -659,6 +668,19 @@ io.on("connection", (socket) => {
 
     console.log("✅ INIT:", e, s, "room=", room, "connections=", activeRooms[room]);
   });
+// 👁️ PWA → SERVER : visibilité (mobile background / app hidden)
+  socket.on("pwa_visibility", ({ isVisible }) => {
+    const email = socket.data.email;
+    const sellerSlug = socket.data.sellerSlug;
+    if (!email || !sellerSlug) return;
+
+    const room = pwaRoom(email, sellerSlug);
+    roomVisibility[room] = !!isVisible;
+
+
+    console.log("👁 VISIBILITY:", room, "visible=", roomVisibility[room]);
+  });
+
 
   // ✅ PWA → TELEGRAM (client -> staff topic)
   socket.on("client_message", async ({ text }) => {
@@ -705,6 +727,7 @@ io.on("connection", (socket) => {
 
     if (email && sellerSlug) {
       const room = pwaRoom(email, sellerSlug);
+      roomVisibility[room] = false;
       const socketsInRoom = io.sockets.adapter.rooms.get(room);
 
       if (activeRooms[room]) {
