@@ -223,13 +223,17 @@ async function notifyClient(room, eventName, payload) {
     console.log("📌 ACTIVE COUNT FOR ROOM:", activeRooms[room]);
     console.log("=======================================");
 
+    
     const activeCount = activeRooms[room] || 0;
+    const isVisible = roomVisibility[room];
 
     if (activeCount > 0) {
       console.log("✅ REALTIME EMIT TRIGGERED");
       io.to(room).emit(eventName, payload);
-    } else {
-      console.log("⚠️ NO ACTIVE CONNECTION FOR ROOM");
+    }
+
+    if (activeCount === 0 || isVisible === false) {
+      console.log("📧 EMAIL TRIGGERED (offline or invisible)");
       missedCounts[room] = (missedCounts[room] || 0) + 1;
     }
 
