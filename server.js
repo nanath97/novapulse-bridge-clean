@@ -235,6 +235,16 @@ async function notifyClient(room, eventName, payload) {
     if (activeCount === 0 || isVisible === false) {
       console.log("📧 EMAIL TRIGGERED (offline or invisible)");
       missedCounts[room] = (missedCounts[room] || 0) + 1;
+      // récupération email depuis la room
+      const parts = room.split(":");
+      const clientEmail = parts[2];
+
+      if (clientEmail) {
+        await sendEmailNotification(
+          clientEmail,
+          payload?.text || "Vous avez reçu un nouveau message."
+        );
+      }
     }
 
   } catch (err) {
