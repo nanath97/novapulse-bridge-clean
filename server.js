@@ -225,17 +225,17 @@ async function notifyClient(room, eventName, payload) {
 
     
     const activeCount = activeRooms[room] || 0;
-    const isVisible = roomVisibility[room];
 
     if (activeCount > 0) {
       console.log("✅ REALTIME EMIT TRIGGERED");
       io.to(room).emit(eventName, payload);
     }
 
-    if (activeCount === 0 || isVisible === false) {
-      console.log("📧 EMAIL TRIGGERED (offline or invisible)");
+    // Email UNIQUEMENT si la room est réellement offline
+    if (activeCount === 0) {
+      console.log("📧 EMAIL TRIGGERED (offline)");
       missedCounts[room] = (missedCounts[room] || 0) + 1;
-      // récupération email depuis la room
+
       const parts = room.split(":");
       const clientEmail = parts[2];
 
@@ -660,6 +660,9 @@ const missedCounts = Object.create(null);
 // room -> true (visible) / false (invisible)
 const roomVisibility = Object.create(null);
 
+// Dernier "signal de vie" par room (heartbeat)
+const roomLastSeen = Object.create(null);
+
 // Dernière activité utilisateur par room (timestamp)
 const lastActivity = Object.create(null);
 
@@ -680,6 +683,7 @@ io.on("connection", (socket) => {
     socket.join(room);
 
     activeRooms[room] = (activeRooms[room] || 0) + 1; // ← ajout propre
+    roomLastSeen[room] = Date.now();
     lastActivity[room] = Date.now();
     console.log("✅ INIT:", e, s, "room=", room, "connections=", activeRooms[room]);
   });
@@ -695,14 +699,14 @@ io.on("connection", (socket) => {
 
     console.log("👁 VISIBILITY:", room, "visible=", roomVisibility[room]);
   });
-  // 💓 Heartbeat : activité continue PWA
+  // 💓 Heartbeat : signal de vie PWA
   socket.on("heartbeat", () => {
     const email = socket.data.email;
     const sellerSlug = socket.data.sellerSlug;
     if (!email || !sellerSlug) return;
 
     const room = pwaRoom(email, sellerSlug);
-    lastActivity[room] = Date.now();
+    roomLastSeen[room] = Date.now();
 
     console.log("💓 HEARTBEAT:", room);
   });
