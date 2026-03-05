@@ -518,6 +518,7 @@ if (
   const email = normEmail(row.email);
   const sellerSlug = normSlug(row.seller_slug);
   const room = pwaRoom(email, sellerSlug);
+  console.log("📡 Emitting quote to PWA room:", room)
 
   // C1) admin -> PWA texte normal
   if (text && !message.photo && !message.video && !message.document) {
@@ -1754,6 +1755,7 @@ app.post("/generate-quote", async (req,res)=>{
 try{
 
 const {topic,email,seller,items} = req.body
+console.log("🧾 GENERATE QUOTE REQUEST:", { topic, email, seller, items })
 
 if(!topic || !items || !items.length){
 return res.status(400).json({error:"missing data"})
@@ -1809,15 +1811,17 @@ form.append("chat_id", STAFF_GROUP_ID)
 form.append("message_thread_id", String(topic))
 form.append("document", buffer, {
 filename:"quote.html",
-contentType:"text/html"
+contentType:"application/pdf"
 })
-
+console.log("📤 Sending quote to Telegram topic:", topic)
 await axios.post(
 `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
 form,
 {headers: form.getHeaders()}
 )
+console.log("✅ Quote sent to Telegram successfully")
 // sauvegarde dans l'historique PWA (Airtable)
+console.log("🔎 Searching Airtable client with topic:", topic)
 const records = await tablePWA
 .select({
 filterByFormula: `{topic_id}='${topic}'`,
