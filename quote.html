@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Create Quote</title>
+
+<style>
+body{
+font-family: Arial;
+max-width:700px;
+margin:auto;
+padding:30px;
+}
+
+input{
+width:100%;
+padding:8px;
+margin:5px 0;
+}
+
+button{
+padding:10px 20px;
+margin-top:10px;
+}
+
+table{
+width:100%;
+margin-top:20px;
+}
+</style>
+
+</head>
+
+<body>
+
+<h2>Create Quote</h2>
+
+<div id="items"></div>
+
+<button onclick="addItem()">Add service</button>
+
+<br><br>
+
+<button onclick="generate()">Generate Quote</button>
+
+<script>
+
+const params = new URLSearchParams(window.location.search)
+const topic = params.get("topic")
+
+let items = []
+
+function addItem(){
+
+const index = items.length
+
+const div = document.createElement("div")
+
+div.innerHTML = `
+<input placeholder="Service" id="service${index}">
+<input placeholder="Qty" id="qty${index}">
+<input placeholder="Price" id="price${index}">
+`
+
+document.getElementById("items").appendChild(div)
+
+items.push({})
+}
+
+async function generate(){
+
+const list = []
+
+for(let i=0;i<items.length;i++){
+
+const service = document.getElementById("service"+i).value
+const qty = document.getElementById("qty"+i).value
+const price = document.getElementById("price"+i).value
+
+list.push({service,qty,price})
+
+}
+
+await fetch("/generate-quote",{
+method:"POST",
+headers:{ "Content-Type":"application/json" },
+body:JSON.stringify({
+topic,
+items:list
+})
+})
+
+alert("Quote sent")
+
+}
+
+addItem()
+
+</script>
+
+</body>
+</html>
