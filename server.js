@@ -1775,88 +1775,103 @@ const buffers = []
 doc.on("data", buffers.push.bind(buffers))
 
 // ===== WRITE PDF CONTENT =====
+// ===== Helpers =====
+const euro = (n) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(n || 0))
 
-doc.font("Helvetica-Bold")
-doc.fontSize(26).text("NovaPulse", { align: "center" })
+// Marges
+const left = 50
+const right = 545
+const tableWidth = right - left
 
-doc.font("Helvetica")
-doc.fontSize(14).text("DEVIS", { align: "center" })
+// Colonnes (largeurs fixes)
+const colServiceX = left
+const colServiceW = 260
 
-doc.moveDown()
+const colQtyX = colServiceX + colServiceW
+const colQtyW = 55
 
-doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke()
+const colPriceX = colQtyX + colQtyW
+const colPriceW = 90
 
-doc.moveDown()
+const colTotalX = colPriceX + colPriceW
+const colTotalW = right - colTotalX
 
-// Informations client
-doc.fontSize(11)
-doc.text(`Client : ${email || "-"}`, 40)
-doc.text(`Date : ${new Date().toLocaleDateString("fr-FR")}`, 400)
+const rowH = 26
+
+function hr(y) {
+  doc.moveTo(left, y).lineTo(right, y).stroke()
+}
+
+function drawHeaderRow(y) {
+  // bande grise légère (optionnel mais pro)
+  doc.save()
+  doc.rect(left, y - 6, tableWidth, rowH).fill("#F3F4F6")
+  doc.fillColor("black")
+  doc.restore()
+
+  doc.font("Helvetica-Bold").fontSize(11)
+  doc.text("Service", colServiceX, y, { width: colServiceW })
+  doc.text("Qté", colQtyX, y, { width: colQtyW, align: "center" })
+  doc.text("Prix unitaire", colPriceX, y, { width: colPriceW, align: "right" })
+  doc.text("Total", colTotalX, y, { width: colTotalW, align: "right" })
+}
+
+function drawItemRow(y, item) {
+  const qty = Number(item.qty || 0)
+  const price = Number(item.price || 0)
+  const lineTotal = qty * price
+
+  doc.font("Helvetica").fontSize(11)
+
+  // Service (avec ellipsis simple si trop long)
+  const service = String(item.service || "").trim()
+  doc.text(service, colServiceX, y, { width: colServiceW, ellipsis: true })
+
+  doc.text(String(qty), colQtyX, y, { width: colQtyW, align: "center" })
+  doc.text(euro(price), colPriceX, y, { width: colPriceW, align: "right" })
+  doc.text(euro(lineTotal), colTotalX, y, { width: colTotalW, align: "right" })
+
+  return lineTotal
+}
+// ===== Infos client (alignées) =====
+doc.font("Helvetica").fontSize(11)
+
+const yInfo = doc.y + 10
+doc.text(`Client : ${email || "-"}`, left, yInfo, { width: 260 })
+doc.text(`Date : ${new Date().toLocaleDateString("fr-FR")}`, 0, yInfo, { align: "right" })
 
 doc.moveDown(2)
 
+// ===== Tableau =====
+let y = doc.y + 10
+hr(y)               // ligne haut
+y += 12
 
-// Positions fixes des colonnes
-const colService = 40
-const colQty = 320
-const colPrice = 400
-const colTotal = 480
+drawHeaderRow(y)
+y += rowH
 
-
-// En-tête du tableau
-doc.font("Helvetica-Bold")
-
-doc.text("Service", colService)
-doc.text("Qté", colQty)
-doc.text("Prix unitaire", colPrice)
-doc.text("Total", colTotal)
-
-doc.moveDown(0.5)
-
-doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke()
-
-doc.moveDown()
-
+hr(y - 6)           // ligne sous header
 
 let total = 0
-
-doc.font("Helvetica")
-
-items.forEach(i => {
-
-const qty = Number(i.qty || 0)
-const price = Number(i.price || 0)
-const lineTotal = qty * price
-
-total += lineTotal
-
-doc.text(i.service, colService)
-doc.text(qty, colQty)
-doc.text(price + " €", colPrice)
-doc.text(lineTotal + " €", colTotal)
-
-doc.moveDown()
-
+items.forEach((it) => {
+  total += drawItemRow(y, it)
+  y += rowH
 })
 
+// ligne fin tableau
+hr(y - 6)
 
-doc.moveDown()
-
-doc.moveTo(300, doc.y).lineTo(550, doc.y).stroke()
-
-doc.moveDown()
-
-doc.font("Helvetica-Bold")
+// ===== Total (bloc à droite, propre) =====
+y += 18
+doc.font("Helvetica-Bold").fontSize(12)
+doc.text("TOTAL", colPriceX, y, { width: colPriceW, align: "right" })
 doc.fontSize(16)
+doc.text(euro(total), colTotalX, y - 4, { width: colTotalW, align: "right" })
 
-doc.text(`TOTAL : ${total} €`, colTotal)
-
-doc.moveDown(2)
-
-doc.font("Helvetica")
-doc.fontSize(9)
-
-doc.text("Propulsé par NovaPulse", { align: "center" })
+// Footer
+doc.font("Helvetica").fontSize(9)
+doc.text("Propulsé par NovaPulse", 0, y + 50, { align: "center" })
 
 doc.end()
 
