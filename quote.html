@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>NovaPulse Quote</title>
+
+<style>
+body{
+font-family:Arial;
+padding:30px;
+max-width:700px;
+margin:auto;
+}
+
+h1{
+text-align:center;
+}
+
+.line{
+display:flex;
+gap:10px;
+margin-bottom:10px;
+}
+
+input{
+flex:1;
+padding:8px;
+}
+
+button{
+padding:10px 15px;
+margin-top:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>Créer un Quote</h1>
+
+<div id="lines"></div>
+
+<button onclick="addLine()">+ Ajouter ligne</button>
+
+<br><br>
+
+<button onclick="generate()">Générer PDF</button>
+
+<script>
+
+function addLine(){
+
+const div = document.createElement("div")
+div.className = "line"
+
+div.innerHTML = `
+<input placeholder="Service">
+<input type="number" placeholder="Qté">
+<input type="number" placeholder="Prix">
+`
+
+document.getElementById("lines").appendChild(div)
+
+}
+
+addLine()
+
+async function generate(){
+
+const params = new URLSearchParams(window.location.search)
+
+const topic = params.get("topic")
+const email = params.get("email")
+const seller = params.get("seller")
+
+const lines = [...document.querySelectorAll(".line")].map(l=>{
+const inputs = l.querySelectorAll("input")
+
+return {
+service:inputs[0].value,
+qty:Number(inputs[1].value),
+price:Number(inputs[2].value)
+}
+})
+
+await fetch("/generate-quote",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+topic,
+email,
+seller,
+items:lines
+})
+})
+
+alert("Quote envoyé au client")
+
+}
+
+</script>
+
+</body>
+</html>

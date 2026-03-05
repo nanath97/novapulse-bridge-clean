@@ -41,6 +41,11 @@ const multer = require("multer");
 const streamifier = require("streamifier");
 const cloudinary = require("cloudinary").v2;
 const path = require("path");
+const path = require("path")
+
+app.get("/quote", (req,res)=>{
+res.sendFile(path.join(__dirname,"quote.html"))
+})
 
 if (process.env.CLOUDINARY_URL) {
   cloudinary.config(process.env.CLOUDINARY_URL);
