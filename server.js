@@ -1824,7 +1824,7 @@ console.log("✅ Quote sent to Telegram successfully")
 console.log("🔎 Searching Airtable client with topic:", topic)
 const records = await tablePWA
 .select({
-filterByFormula: `{topic_id}='${topic}'`,
+filterByFormula: `{topic_id}=${Number(topic)}`,
 maxRecords: 1
 })
 .firstPage()
