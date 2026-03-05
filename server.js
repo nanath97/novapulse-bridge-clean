@@ -1776,29 +1776,51 @@ doc.on("data", buffers.push.bind(buffers))
 
 // ===== WRITE PDF CONTENT =====
 
-doc.fontSize(28).text("NovaPulse", { align: "center" })
-doc.fontSize(18).text("DEVIS", { align: "center" })
+doc.font("Helvetica-Bold")
+doc.fontSize(26).text("NovaPulse", { align: "center" })
+
+doc.font("Helvetica")
+doc.fontSize(14).text("DEVIS", { align: "center" })
 
 doc.moveDown()
+
 doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke()
 
 doc.moveDown()
 
-doc.fontSize(12).text(`Client : ${email || "-"}`)
-doc.text(`Date : ${new Date().toLocaleDateString()}`)
+// Informations client
+doc.fontSize(11)
+doc.text(`Client : ${email || "-"}`, 40)
+doc.text(`Date : ${new Date().toLocaleDateString("fr-FR")}`, 400)
+
+doc.moveDown(2)
+
+
+// Positions fixes des colonnes
+const colService = 40
+const colQty = 320
+const colPrice = 400
+const colTotal = 480
+
+
+// En-tête du tableau
+doc.font("Helvetica-Bold")
+
+doc.text("Service", colService)
+doc.text("Qté", colQty)
+doc.text("Prix unitaire", colPrice)
+doc.text("Total", colTotal)
+
+doc.moveDown(0.5)
+
+doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke()
 
 doc.moveDown()
 
-doc.text("Service", 40)
-doc.text("Qté", 300)
-doc.text("Prix", 360)
-doc.text("Total", 450)
-
-doc.moveTo(40, doc.y + 5).lineTo(550, doc.y + 5).stroke()
-
-doc.moveDown()
 
 let total = 0
+
+doc.font("Helvetica")
 
 items.forEach(i => {
 
@@ -1808,14 +1830,15 @@ const lineTotal = qty * price
 
 total += lineTotal
 
-doc.text(i.service, 40)
-doc.text(String(qty), 300)
-doc.text(price + " €", 360)
-doc.text(lineTotal + " €", 450)
+doc.text(i.service, colService)
+doc.text(qty, colQty)
+doc.text(price + " €", colPrice)
+doc.text(lineTotal + " €", colTotal)
 
 doc.moveDown()
 
 })
+
 
 doc.moveDown()
 
@@ -1823,17 +1846,17 @@ doc.moveTo(300, doc.y).lineTo(550, doc.y).stroke()
 
 doc.moveDown()
 
-doc.fontSize(16).text(`TOTAL : ${total} €`, 350)
+doc.font("Helvetica-Bold")
+doc.fontSize(16)
+
+doc.text(`TOTAL : ${total} €`, colTotal)
 
 doc.moveDown(2)
 
-doc.fontSize(10).text("Propulsé par NovaPulse", { align: "center" })
+doc.font("Helvetica")
+doc.fontSize(9)
 
-doc.end()
-
-await new Promise(resolve => doc.on("end", resolve))
-
-const pdfBuffer = Buffer.concat(buffers)
+doc.text("Propulsé par NovaPulse", { align: "center" })
 
 
 // ===== SEND TO TELEGRAM =====
