@@ -1858,6 +1858,12 @@ doc.fontSize(9)
 
 doc.text("Propulsé par NovaPulse", { align: "center" })
 
+doc.end()
+
+await new Promise(resolve => doc.on("end", resolve))
+
+const pdfBuffer = Buffer.concat(buffers)
+
 
 // ===== SEND TO TELEGRAM =====
 
