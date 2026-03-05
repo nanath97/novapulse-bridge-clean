@@ -43,9 +43,6 @@ const cloudinary = require("cloudinary").v2;
 const path = require("path");
 
 
-app.get("/quote", (req,res)=>{
-res.sendFile(path.join(__dirname,"quote.html"))
-})
 
 if (process.env.CLOUDINARY_URL) {
   cloudinary.config(process.env.CLOUDINARY_URL);
@@ -103,6 +100,9 @@ app.use(express.json({ limit: "20mb" })); // un peu plus safe pour certains payl
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
+app.get("/quote", (req,res)=>{
+res.sendFile(path.join(__dirname,"quote.html"))
+})
 
 // =======================
 // Airtable
