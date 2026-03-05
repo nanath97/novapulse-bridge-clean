@@ -1810,7 +1810,7 @@ const form = new FormData()
 form.append("chat_id", STAFF_GROUP_ID)
 form.append("message_thread_id", String(topic))
 form.append("document", buffer, {
-filename:"quote.html",
+filename:"quote.pdf",
 contentType:"application/pdf"
 })
 console.log("📤 Sending quote to Telegram topic:", topic)
