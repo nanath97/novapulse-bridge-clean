@@ -1776,10 +1776,26 @@ doc.on("data", buffers.push.bind(buffers))
 
 // ===== WRITE PDF CONTENT =====
 
-doc.fontSize(22).text("Quote", { align:"center" })
+doc.fontSize(26).text("NovaPulse", { align: "center" })
+doc.fontSize(18).text("QUOTE", { align: "center" })
+
+doc.moveDown()
+doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke()
+
 doc.moveDown()
 
 doc.fontSize(12).text(`Client : ${email || "-"}`)
+doc.text(`Date : ${new Date().toLocaleDateString()}`)
+
+doc.moveDown()
+
+doc.fontSize(12).text("Service", 40)
+doc.text("Qty", 300)
+doc.text("Price", 350)
+doc.text("Total", 450)
+
+doc.moveTo(40, doc.y + 5).lineTo(550, doc.y + 5).stroke()
+
 doc.moveDown()
 
 let total = 0
@@ -1792,14 +1808,26 @@ const lineTotal = qty * price
 
 total += lineTotal
 
-doc.text(`${i.service} | ${qty} x ${price}€ = ${lineTotal}€`)
+doc.text(i.service, 40)
+doc.text(qty.toString(), 300)
+doc.text(price + "€", 350)
+doc.text(lineTotal + "€", 450)
+
+doc.moveDown()
 
 })
 
 doc.moveDown()
-doc.fontSize(16).text(`Total : ${total}€`)
+
+doc.moveTo(300, doc.y).lineTo(550, doc.y).stroke()
+
 doc.moveDown()
-doc.fontSize(10).text("Propulsé par NovaPulse")
+
+doc.fontSize(16).text(`TOTAL : ${total}€`, 350)
+
+doc.moveDown(2)
+
+doc.fontSize(10).text("Propulsé par NovaPulse", { align: "center" })
 
 doc.end()
 
