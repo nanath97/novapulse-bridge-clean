@@ -470,7 +470,7 @@ if (
     [
       {
         text: "📝 Ajouter une note",
-        callback_data: `annoter_pwa_${threadId}`,
+        callback_data: `annoter_pwa_${topicId}`,
       },
     ],
     [
@@ -1382,7 +1382,7 @@ app.post("/pwa/register-client", async (req, res) => {
   [
     {
       text: "📝 Ajouter une note",
-      callback_data: `annoter_pwa_${threadId}`,
+      callback_data: `annoter_pwa_${topicId}`,
     },
   ],
   [
