@@ -1820,6 +1820,48 @@ form,
 
 res.json({success:true})
 
+// 🔎 retrouver le client via topic_id
+const records = await tablePWA
+.select({
+filterByFormula: `{topic_id}='${topic}'`,
+maxRecords: 1,
+})
+.firstPage()
+
+if(records.length){
+
+const row = records[0].fields
+const email = normEmail(row.email)
+const sellerSlug = normSlug(row.seller_slug)
+
+const room = pwaRoom(email, sellerSlug)
+
+// URL simple pour la PWA
+const quoteUrl = `/pwa/download?url=quote&name=quote.pdf`
+
+// émission realtime
+io.to(room).emit("admin_media",{
+type:"document",
+url: quoteUrl,
+fileName:"quote.pdf",
+text:"📄 Nouveau devis",
+from:"admin"
+})
+
+// sauvegarde historique
+pushPwaHistory(room,{
+from:"admin",
+type:"media",
+mediaType:"document",
+url: quoteUrl,
+fileName:"quote.pdf",
+text:"📄 Nouveau devis"
+})
+
+console.log("📄 Quote sent to PWA:", room)
+
+}
+
 }catch(err){
 console.error("❌ generate quote error:",err.message)
 res.status(500).json({success:false})
