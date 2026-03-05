@@ -1766,15 +1766,47 @@ return res.status(400).json({error:"missing data"})
 
 // ===== CREATE PDF =====
 
-const doc = new PDFDocument()
+// ===== CREATE PDF =====
+
+const doc = new PDFDocument({ margin: 40 })
 
 const buffers = []
-
 doc.on("data", buffers.push.bind(buffers))
 
-doc.on("end", async () => {
+// ===== WRITE PDF CONTENT =====
+
+doc.fontSize(22).text("Quote", { align:"center" })
+doc.moveDown()
+
+doc.fontSize(12).text(`Client : ${email || "-"}`)
+doc.moveDown()
+
+let total = 0
+
+items.forEach(i => {
+
+const qty = Number(i.qty || 0)
+const price = Number(i.price || 0)
+const lineTotal = qty * price
+
+total += lineTotal
+
+doc.text(`${i.service} | ${qty} x ${price}€ = ${lineTotal}€`)
+
+})
+
+doc.moveDown()
+doc.fontSize(16).text(`Total : ${total}€`)
+doc.moveDown()
+doc.fontSize(10).text("Propulsé par NovaPulse")
+
+doc.end()
+
+await new Promise(resolve => doc.on("end", resolve))
 
 const pdfBuffer = Buffer.concat(buffers)
+
+// ===== SEND TO TELEGRAM =====
 
 const form = new FormData()
 
@@ -1848,39 +1880,6 @@ console.log("📄 Quote sent to PWA:", room)
 }
 
 res.json({success:true})
-
-})
-
-// ===== WRITE PDF CONTENT =====
-
-doc.fontSize(22).text("Quote", {align:"center"})
-doc.moveDown()
-
-doc.fontSize(12).text(`Client : ${email || "-"}`)
-doc.moveDown()
-
-let total = 0
-
-items.forEach(i => {
-
-const qty = Number(i.qty || 0)
-const price = Number(i.price || 0)
-const lineTotal = qty * price
-
-total += lineTotal
-
-doc.text(`${i.service} - ${qty} x ${price}€ = ${lineTotal}€`)
-
-})
-
-doc.moveDown()
-
-doc.fontSize(16).text(`Total : ${total}€`)
-doc.moveDown()
-
-doc.fontSize(10).text("Propulsé par NovaPulse")
-
-doc.end()
 
 }catch(err){
 
