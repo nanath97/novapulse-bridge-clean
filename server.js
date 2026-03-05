@@ -1770,6 +1770,23 @@ return res.status(400).json({error:"missing data"})
 // ===== CREATE PDF =====
 
 const doc = new PDFDocument({ margin: 40 })
+// ICI 👇 on ajoute le titre
+
+doc.font("Helvetica-Bold")
+doc.fontSize(32)
+doc.text("NovaPulse", { align: "center" })
+
+doc.moveDown(0.3)
+
+doc.font("Helvetica")
+doc.fontSize(14)
+doc.text("DEVIS", { align: "center" })
+
+doc.moveDown()
+
+doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+
+doc.moveDown(2)
 
 const buffers = []
 doc.on("data", buffers.push.bind(buffers))
