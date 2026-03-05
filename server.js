@@ -1856,7 +1856,10 @@ const room = pwaRoom(emailClient, sellerSlug)
 
 console.log("📡 Emitting quote to PWA room:", room)
 
-const quoteUrl = `/pwa/download?url=quote&name=quote.pdf`
+const filePath = `./quote-${topic}.pdf`
+fs.writeFileSync(filePath, pdfBuffer)
+
+const quoteUrl = `/quote-file/${topic}`
 
 io.to(room).emit("admin_media",{
 type:"document",
@@ -1887,6 +1890,17 @@ console.error("❌ generate quote error:",err.message)
 res.status(500).json({success:false})
 
 }
+
+})
+app.get("/quote-file/:topic", (req,res)=>{
+
+const file = `./quote-${req.params.topic}.pdf`
+
+if(!fs.existsSync(file)){
+return res.status(404).send("File not found")
+}
+
+res.download(file,"quote.pdf")
 
 })
 
