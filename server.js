@@ -466,15 +466,21 @@ if (
               `📒 Notes :\n${merged || "Aucune note"}\n\n` +
               "👤 Admin en charge : Aucun",
             reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "📝 Ajouter une note",
-                    callback_data: `annoter_pwa_${threadId}`,
-                  },
-                ],
-              ],
-            },
+  inline_keyboard: [
+    [
+      {
+        text: "📝 Ajouter une note",
+        callback_data: `annoter_pwa_${threadId}`,
+      },
+    ],
+    [
+      {
+        text: "📄 Créer un devis",
+        url: `https://novapulse-bridge.onrender.com/quote?topic=${threadId}`
+      },
+    ],
+  ],
+},
           }
         );
 
@@ -1361,35 +1367,34 @@ app.post("/pwa/register-client", async (req, res) => {
     // 3️⃣ Envoi du panel Telegram + récupération message_id
     try {
       const panelResp = await axios.post(
-  `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-  {
-    chat_id: STAFF_GROUP_ID,
-    message_thread_id: Number(topicId),
-    text: `🧐 PANEL DE CONTRÔLE PWA
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          chat_id: STAFF_GROUP_ID,
+          message_thread_id: Number(topicId),
+          text: `🧐 PANEL DE CONTRÔLE PWA
 
 📧 Email : ${email}
 🏷️ Seller : ${sellerSlug}
 📒 Notes :
 👤 Admin en charge : Aucun`,
-
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: "📝 Ajouter une note",
-            callback_data: `annoter_pwa_${topicId}`,
-          },
-        ],
-        [
-          {
-            text: "📄 Créer un devis",
-            url: `https://novapulse-bridge.onrender.com/quote?topic=${topicId}`,
-          },
-        ],
-      ],
+          reply_markup: {
+            inline_keyboard: [
+  [
+    {
+      text: "📝 Ajouter une note",
+      callback_data: `annoter_pwa_${threadId}`,
     },
-  }
-);
+  ],
+  [
+    {
+      text: "📄 Créer un devis",
+      url: `https://novapulse-bridge.onrender.com/quote?topic=${threadId}`,
+    },
+  ],
+],
+          },
+        }
+      );
 
       // 🔥 CRUCIAL : récupérer le message_id du panel
       const panelMessageId = panelResp.data.result.message_id;
