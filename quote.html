@@ -1,101 +1,214 @@
 <!DOCTYPE html>
-
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Create Quote</title>
+<title>Devis NovaPulse</title>
 
 <style>
+
 body{
-font-family: Arial;
-max-width:700px;
+font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
+background:#0f172a;
+color:white;
+margin:0;
+padding:0;
+}
+
+.container{
+max-width:900px;
 margin:auto;
 padding:30px;
+}
+
+.card{
+background:white;
+color:#111;
+border-radius:12px;
+padding:25px;
+box-shadow:0 10px 30px rgba(0,0,0,0.25);
+}
+
+h1{
+text-align:center;
+margin-bottom:5px;
+}
+
+.subtitle{
+text-align:center;
+color:#666;
+margin-bottom:25px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-bottom:20px;
+}
+
+th{
+text-align:left;
+padding:10px;
+border-bottom:2px solid #eee;
+}
+
+td{
+padding:10px;
 }
 
 input{
 width:100%;
 padding:8px;
-margin:5px 0;
+border-radius:6px;
+border:1px solid #ddd;
 }
 
 button{
-padding:10px 20px;
+padding:10px 16px;
+border:none;
+border-radius:6px;
+cursor:pointer;
+font-weight:600;
+}
+
+.add{
+background:#6366f1;
+color:white;
 margin-top:10px;
 }
 
-table{
+.generate{
+background:#10b981;
+color:white;
 width:100%;
-margin-top:20px;
+margin-top:15px;
+font-size:16px;
 }
-</style>
 
+.total{
+text-align:right;
+font-size:20px;
+font-weight:bold;
+margin-top:10px;
+}
+
+.footer{
+text-align:center;
+font-size:12px;
+color:#aaa;
+margin-top:15px;
+}
+
+</style>
 </head>
 
 <body>
 
-<h2>Create Quote</h2>
+<div class="container">
 
-<div id="items"></div>
+<div class="card">
 
-<button onclick="addItem()">Add service</button>
+<h1>NovaPulse</h1>
+<div class="subtitle">Création de devis express</div>
 
-<br><br>
+<table id="table">
+<thead>
+<tr>
+<th>Service</th>
+<th>Qté</th>
+<th>Prix €</th>
+<th>Total</th>
+</tr>
+</thead>
 
-<button onclick="generate()">Generate Quote</button>
+<tbody id="rows"></tbody>
+</table>
+
+<button class="add" onclick="addRow()">+ Ajouter un service</button>
+
+<div class="total" id="total">Total : 0 €</div>
+
+<button class="generate" onclick="generate()">Générer le devis</button>
+
+<div class="footer">Propulsé par NovaPulse</div>
+
+</div>
+</div>
 
 <script>
 
 const params = new URLSearchParams(window.location.search)
 const topic = params.get("topic")
 
-let items = []
+function addRow(){
 
-function addItem(){
+const tbody=document.getElementById("rows")
 
-const index = items.length
+const row=document.createElement("tr")
 
-const div = document.createElement("div")
-
-div.innerHTML = `
-<input placeholder="Service" id="service${index}">
-<input placeholder="Qty" id="qty${index}">
-<input placeholder="Price" id="price${index}">
+row.innerHTML=`
+<td><input placeholder="Service"></td>
+<td><input type="number" value="1" min="1"></td>
+<td><input type="number" value="0" min="0"></td>
+<td class="lineTotal">0 €</td>
 `
 
-document.getElementById("items").appendChild(div)
+tbody.appendChild(row)
 
-items.push({})
+row.querySelectorAll("input").forEach(i=>{
+i.addEventListener("input",updateTotal)
+})
+
+}
+
+function updateTotal(){
+
+let total=0
+
+document.querySelectorAll("#rows tr").forEach(r=>{
+
+const qty=Number(r.children[1].querySelector("input").value||0)
+const price=Number(r.children[2].querySelector("input").value||0)
+
+const line=qty*price
+
+r.children[3].innerText=line+" €"
+
+total+=line
+
+})
+
+document.getElementById("total").innerText="Total : "+total+" €"
+
 }
 
 async function generate(){
 
-const list = []
+const items=[]
 
-for(let i=0;i<items.length;i++){
+document.querySelectorAll("#rows tr").forEach(r=>{
 
-const service = document.getElementById("service"+i).value
-const qty = document.getElementById("qty"+i).value
-const price = document.getElementById("price"+i).value
+const service=r.children[0].querySelector("input").value
+const qty=r.children[1].querySelector("input").value
+const price=r.children[2].querySelector("input").value
 
-list.push({service,qty,price})
+items.push({service,qty,price})
 
-}
+})
 
 await fetch("/generate-quote",{
 method:"POST",
 headers:{ "Content-Type":"application/json" },
 body:JSON.stringify({
 topic,
-items:list
+items
 })
 })
 
-alert("Quote sent")
+alert("✅ Devis envoyé")
 
 }
 
-addItem()
+addRow()
 
 </script>
 
