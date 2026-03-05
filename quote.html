@@ -1,107 +1,99 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>NovaPulse Quote</title>
+
+<meta charset="utf-8">
 
 <style>
+
 body{
-font-family:Arial;
-padding:30px;
-max-width:700px;
-margin:auto;
+font-family: Arial;
+padding:40px;
+color:#333;
 }
 
-h1{
+.header{
 text-align:center;
+margin-bottom:40px;
 }
 
-.line{
-display:flex;
-gap:10px;
-margin-bottom:10px;
+.logo{
+font-size:28px;
+font-weight:bold;
 }
 
-input{
-flex:1;
-padding:8px;
+.subtitle{
+font-size:18px;
+color:#666;
 }
 
-button{
-padding:10px 15px;
-margin-top:10px;
+.table{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}
+
+.table th{
+border-bottom:2px solid #000;
+text-align:left;
+padding:10px;
+}
+
+.table td{
+padding:10px;
+border-bottom:1px solid #ddd;
+}
+
+.total{
+margin-top:30px;
+text-align:right;
+font-size:20px;
+font-weight:bold;
+}
+
+.footer{
+margin-top:60px;
+text-align:center;
+font-size:12px;
+color:#888;
 }
 
 </style>
+
 </head>
 
 <body>
 
-<h1>Créer un Quote</h1>
+<div class="header">
 
-<div id="lines"></div>
+<div class="logo">NovaPulse</div>
+<div class="subtitle">Quote</div>
 
-<button onclick="addLine()">+ Ajouter ligne</button>
+</div>
 
-<br><br>
+<p><strong>Client :</strong> {{email}}</p>
+<p><strong>Date :</strong> {{date}}</p>
 
-<button onclick="generate()">Générer PDF</button>
+<table class="table">
 
-<script>
+<tr>
+<th>Service</th>
+<th>Qty</th>
+<th>Price</th>
+<th>Total</th>
+</tr>
 
-function addLine(){
+{{rows}}
 
-const div = document.createElement("div")
-div.className = "line"
+</table>
 
-div.innerHTML = `
-<input placeholder="Service">
-<input type="number" placeholder="Qté">
-<input type="number" placeholder="Prix">
-`
+<div class="total">
+Total : {{total}} €
+</div>
 
-document.getElementById("lines").appendChild(div)
-
-}
-
-addLine()
-
-async function generate(){
-
-const params = new URLSearchParams(window.location.search)
-
-const topic = params.get("topic")
-const email = params.get("email")
-const seller = params.get("seller")
-
-const lines = [...document.querySelectorAll(".line")].map(l=>{
-const inputs = l.querySelectorAll("input")
-
-return {
-service:inputs[0].value,
-qty:Number(inputs[1].value),
-price:Number(inputs[2].value)
-}
-})
-
-await fetch("/generate-quote",{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({
-topic,
-email,
-seller,
-items:lines
-})
-})
-
-alert("Quote envoyé au client")
-
-}
-
-</script>
+<div class="footer">
+Propulsé par NovaPulse
+</div>
 
 </body>
 </html>
