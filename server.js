@@ -7,6 +7,7 @@ const axios = require("axios");
 const Airtable = require("airtable");
 const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit")
+const fs = require("fs")
 
 console.log("🔥 SERVER.JS BRIDGE LOADED");
 
