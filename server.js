@@ -1835,7 +1835,6 @@ const row = records[0].fields
 const emailClient = normEmail(row.email)
 const sellerSlug = normSlug(row.seller_slug)
 
-// message historique
 await tableMessages.create({
 email: emailClient,
 seller_slug: sellerSlug,
@@ -1844,7 +1843,33 @@ sender: "admin",
 text: "📄 Nouveau devis disponible"
 })
 
+const room = pwaRoom(emailClient, sellerSlug)
+
+console.log("📡 Emitting quote to PWA room:", room)
+
+const quoteUrl = `/pwa/download?url=quote&name=quote.pdf`
+
+io.to(room).emit("admin_media",{
+type:"document",
+url: quoteUrl,
+fileName:"quote.pdf",
+text:"📄 Nouveau devis",
+from:"admin"
+})
+
+pushPwaHistory(room,{
+from:"admin",
+type:"media",
+mediaType:"document",
+url: quoteUrl,
+fileName:"quote.pdf",
+text:"📄 Nouveau devis"
+})
+
+console.log("📄 Quote sent to PWA:", room)
+
 }
+
 res.json({success:true})
 
 }catch(err){
