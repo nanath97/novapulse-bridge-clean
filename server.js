@@ -1807,6 +1807,7 @@ await new Promise(resolve => doc.on("end", resolve))
 
 const pdfBuffer = Buffer.concat(buffers)
 
+
 // ===== SEND TO TELEGRAM =====
 
 const form = new FormData()
@@ -1857,10 +1858,8 @@ const room = pwaRoom(emailClient, sellerSlug)
 
 console.log("📡 Emitting quote to PWA room:", room)
 
-const filePath = `./quote-${topic}.pdf`
-fs.writeFileSync(filePath, pdfBuffer)
 
-const quoteUrl = `/quote-file/${topic}`
+const quoteUrl = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`
 
 io.to(room).emit("admin_media",{
 type:"document",
@@ -1893,17 +1892,7 @@ res.status(500).json({success:false})
 }
 
 })
-app.get("/quote-file/:topic", (req,res)=>{
 
-const file = `./quote-${req.params.topic}.pdf`
-
-if(!fs.existsSync(file)){
-return res.status(404).send("File not found")
-}
-
-res.download(file,"quote.pdf")
-
-})
 
 const PORT = process.env.PORT || 10000;
 
