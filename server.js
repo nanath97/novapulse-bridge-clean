@@ -1361,28 +1361,35 @@ app.post("/pwa/register-client", async (req, res) => {
     // 3️⃣ Envoi du panel Telegram + récupération message_id
     try {
       const panelResp = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-        {
-          chat_id: STAFF_GROUP_ID,
-          message_thread_id: Number(topicId),
-          text: `🧐 PANEL DE CONTRÔLE PWA
+  `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+  {
+    chat_id: STAFF_GROUP_ID,
+    message_thread_id: Number(topicId),
+    text: `🧐 PANEL DE CONTRÔLE PWA
 
 📧 Email : ${email}
 🏷️ Seller : ${sellerSlug}
 📒 Notes :
 👤 Admin en charge : Aucun`,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "📝 Ajouter une note",
-                  callback_data: `annoter_pwa_${topicId}`,
-                },
-              ],
-            ],
+
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: "📝 Ajouter une note",
+            callback_data: `annoter_pwa_${topicId}`,
           },
-        }
-      );
+        ],
+        [
+          {
+            text: "📄 Créer un devis",
+            url: `https://novapulse-bridge.onrender.com/quote?topic=${topicId}`,
+          },
+        ],
+      ],
+    },
+  }
+);
 
       // 🔥 CRUCIAL : récupérer le message_id du panel
       const panelMessageId = panelResp.data.result.message_id;
@@ -1734,6 +1741,85 @@ app.post("/pwa/client-send-media", async (req, res) => {
     return res.status(500).json({ success: false, error: "send_failed" });
   }
 });
+// =======================
+// GENERATE QUOTE PDF → TELEGRAM
+// =======================
+
+app.post("/generate-quote", async (req,res)=>{
+try{
+
+const {topic,email,seller,items} = req.body
+
+if(!topic || !items || !items.length){
+return res.status(400).json({error:"missing data"})
+}
+
+let rows = ""
+let total = 0
+
+items.forEach(i=>{
+const qty = Number(i.qty || 0)
+const price = Number(i.price || 0)
+const lineTotal = qty * price
+total += lineTotal
+
+rows += `
+<tr>
+<td>${i.service}</td>
+<td>${qty}</td>
+<td>${price}€</td>
+<td>${lineTotal}€</td>
+</tr>`
+})
+
+const html = `
+<h1>Quote</h1>
+
+<p>Client : ${email || "-"}</p>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr>
+<th>Service</th>
+<th>Qté</th>
+<th>Prix</th>
+<th>Total</th>
+</tr>
+
+${rows}
+
+</table>
+
+<h2>Total : ${total}€</h2>
+
+<p style="margin-top:30px;font-size:12px;">
+Propulsé par NovaPulse
+</p>
+`
+
+const buffer = Buffer.from(html)
+
+const form = new FormData()
+
+form.append("chat_id", STAFF_GROUP_ID)
+form.append("message_thread_id", String(topic))
+form.append("document", buffer, {
+filename:"quote.pdf",
+contentType:"application/pdf"
+})
+
+await axios.post(
+`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+form,
+{headers: form.getHeaders()}
+)
+
+res.json({success:true})
+
+}catch(err){
+console.error("❌ generate quote error:",err.message)
+res.status(500).json({success:false})
+}
+})
 
 const PORT = process.env.PORT || 10000;
 
