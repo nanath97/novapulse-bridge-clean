@@ -6,6 +6,7 @@ const cors = require("cors");
 const axios = require("axios");
 const Airtable = require("airtable");
 const nodemailer = require("nodemailer");
+const PDFDocument = require("pdfkit")
 
 console.log("🔥 SERVER.JS BRIDGE LOADED");
 
@@ -1752,76 +1753,52 @@ app.post("/pwa/client-send-media", async (req, res) => {
 // =======================
 
 app.post("/generate-quote", async (req,res)=>{
+
 try{
 
 const {topic,email,seller,items} = req.body
+
 console.log("🧾 GENERATE QUOTE REQUEST:", { topic, email, seller, items })
 
 if(!topic || !items || !items.length){
 return res.status(400).json({error:"missing data"})
 }
 
-let rows = ""
-let total = 0
+// ===== CREATE PDF =====
 
-items.forEach(i=>{
-const qty = Number(i.qty || 0)
-const price = Number(i.price || 0)
-const lineTotal = qty * price
-total += lineTotal
+const doc = new PDFDocument()
 
-rows += `
-<tr>
-<td>${i.service}</td>
-<td>${qty}</td>
-<td>${price}€</td>
-<td>${lineTotal}€</td>
-</tr>`
-})
+const buffers = []
 
-const html = `
-<h1>Quote</h1>
+doc.on("data", buffers.push.bind(buffers))
 
-<p>Client : ${email || "-"}</p>
+doc.on("end", async () => {
 
-<table border="1" cellpadding="6" cellspacing="0">
-<tr>
-<th>Service</th>
-<th>Qté</th>
-<th>Prix</th>
-<th>Total</th>
-</tr>
-
-${rows}
-
-</table>
-
-<h2>Total : ${total}€</h2>
-
-<p style="margin-top:30px;font-size:12px;">
-Propulsé par NovaPulse
-</p>
-`
-
-const buffer = Buffer.from(html)
+const pdfBuffer = Buffer.concat(buffers)
 
 const form = new FormData()
 
 form.append("chat_id", STAFF_GROUP_ID)
 form.append("message_thread_id", String(topic))
-form.append("document", buffer, {
+form.append("document", pdfBuffer, {
 filename:"quote.pdf",
 contentType:"application/pdf"
 })
+
 console.log("📤 Sending quote to Telegram topic:", topic)
+
 await axios.post(
 `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
 form,
 {headers: form.getHeaders()}
 )
+
 console.log("✅ Quote sent to Telegram successfully")
-// sauvegarde dans l'historique PWA (Airtable)
+
+// ===== SAVE + SEND TO PWA =====
+
 console.log("🔎 Searching Airtable client with topic:", topic)
+
 const records = await tablePWA
 .select({
 filterByFormula: `{topic_id}='${topic}'`,
@@ -1872,10 +1849,46 @@ console.log("📄 Quote sent to PWA:", room)
 
 res.json({success:true})
 
+})
+
+// ===== WRITE PDF CONTENT =====
+
+doc.fontSize(22).text("Quote", {align:"center"})
+doc.moveDown()
+
+doc.fontSize(12).text(`Client : ${email || "-"}`)
+doc.moveDown()
+
+let total = 0
+
+items.forEach(i => {
+
+const qty = Number(i.qty || 0)
+const price = Number(i.price || 0)
+const lineTotal = qty * price
+
+total += lineTotal
+
+doc.text(`${i.service} - ${qty} x ${price}€ = ${lineTotal}€`)
+
+})
+
+doc.moveDown()
+
+doc.fontSize(16).text(`Total : ${total}€`)
+doc.moveDown()
+
+doc.fontSize(10).text("Propulsé par NovaPulse")
+
+doc.end()
+
 }catch(err){
+
 console.error("❌ generate quote error:",err.message)
 res.status(500).json({success:false})
+
 }
+
 })
 
 const PORT = process.env.PORT || 10000;
