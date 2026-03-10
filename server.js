@@ -417,6 +417,10 @@ app.post("/pwa/subscribe", (req, res) => {
 
     console.log("✅ Subscription enregistrée:", key);
 
+    // 🔎 DEBUG IMPORTANT
+    console.log("📦 PUSH MAP SIZE:", pushSubscriptions.size);
+    console.log("📦 PUSH KEYS:", Array.from(pushSubscriptions.keys()));
+
     res.json({ success: true });
 
   } catch (err) {
