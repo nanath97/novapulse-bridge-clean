@@ -30,6 +30,7 @@
     "nodemailer": "^8.0.1",
     "pdfkit": "^0.17.2",
     "socket.io": "^4.8.3",
-    "streamifier": "^0.1.1"
+    "streamifier": "^0.1.1",
+    "web-push": "^3.6.7"
   }
 }

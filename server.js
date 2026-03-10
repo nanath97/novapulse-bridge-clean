@@ -8,6 +8,7 @@ const Airtable = require("airtable");
 const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit")
 const fs = require("fs")
+const webpush = require("web-push");
 
 console.log("🔥 SERVER.JS BRIDGE LOADED");
 
@@ -69,6 +70,18 @@ const upload = multer({
     fileSize: 20 * 1024 * 1024, // 20 MB
   },
 });
+
+// ============================
+// PUSH CONFIGURATION
+// ============================
+
+webpush.setVapidDetails(
+  process.env.VAPID_SUBJECT,
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
+
+console.log("🔔 Web Push configuré");
 
 // =======================
 // HARD FAIL IF MISSING
