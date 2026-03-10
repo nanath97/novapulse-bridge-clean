@@ -232,6 +232,44 @@ async function sendEmailNotification(toEmail, messageText) {
 // =======================
 // CENTRAL NOTIFICATION HELPER (multi-devices + missed counter)
 // =======================
+
+async function sendPushNotification(room, payload) {
+
+  try {
+
+    const parts = room.split(":");
+    const sellerSlug = parts[1];
+    const email = parts[2];
+
+    const key = `${sellerSlug}:${email}`;
+
+    const subscription = pushSubscriptions.get(key);
+
+    if (!subscription) {
+      console.log("⚠️ No push subscription for", key);
+      return;
+    }
+
+    const pushPayload = JSON.stringify({
+      title: "Nouveau message",
+      body: payload?.text || "Vous avez reçu un message",
+      url: `https://app.nova-pulse.app/${sellerSlug}`
+    });
+
+    console.log("📲 Sending PUSH to", key);
+
+    await webpush.sendNotification(subscription, pushPayload);
+
+    console.log("✅ PUSH sent");
+
+  } catch (err) {
+
+    console.error("❌ Push error:", err.message);
+
+  }
+
+}
+
 async function notifyClient(room, eventName, payload) {
   try {
 
@@ -253,7 +291,7 @@ async function notifyClient(room, eventName, payload) {
 
     // Email UNIQUEMENT si la room est réellement offline
     if (activeCount === 0) {
-      console.log("📧 EMAIL TRIGGERED (offline)");
+      console.log("📴 CLIENT OFFLINE → push + email");
       missedCounts[room] = (missedCounts[room] || 0) + 1;
 
       const parts = room.split(":");
