@@ -353,6 +353,39 @@ app.get("/pwa/download", async (req, res) => {
     res.status(500).send("Internal error");
   }
 });
+
+// ============================
+// PUSH SUBSCRIPTION
+// ============================
+
+const pushSubscriptions = new Map();
+
+app.post("/pwa/subscribe", (req, res) => {
+  try {
+    const { email, sellerSlug, subscription } = req.body;
+
+    console.log("🔔 Nouvelle subscription push reçue");
+    console.log("Email:", email);
+    console.log("Seller:", sellerSlug);
+
+    if (!email || !sellerSlug || !subscription) {
+      console.log("❌ Subscription invalide");
+      return res.status(400).json({ success: false });
+    }
+
+    const key = `${sellerSlug}:${email}`;
+
+    pushSubscriptions.set(key, subscription);
+
+    console.log("✅ Subscription enregistrée:", key);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("❌ Subscribe error:", err);
+    res.status(500).json({ success: false });
+  }
+});
 // =======================
 // TELEGRAM → PWA (admin -> client) + CALLBACKS
 // Telegram webhook points here
