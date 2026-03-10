@@ -282,29 +282,33 @@ async function notifyClient(room, eventName, payload) {
     console.log("=======================================");
 
     
-    const activeCount = activeRooms[room] || 0;
+   const activeCount = activeRooms[room] || 0;
 
-    if (activeCount > 0) {
-      console.log("✅ REALTIME EMIT TRIGGERED");
-      io.to(room).emit(eventName, payload);
-    }
+if (activeCount > 0) {
+  console.log("✅ REALTIME EMIT TRIGGERED");
+  io.to(room).emit(eventName, payload);
+}
 
-    // Email UNIQUEMENT si la room est réellement offline
-    if (activeCount === 0) {
-      console.log("📴 CLIENT OFFLINE → push + email");
-      missedCounts[room] = (missedCounts[room] || 0) + 1;
+// client offline
+if (activeCount === 0) {
 
-      const parts = room.split(":");
-      const clientEmail = parts[2];
+  console.log("📴 CLIENT OFFLINE → push + email");
 
-      if (clientEmail) {
-        await sendEmailNotification(
-          clientEmail,
-          payload?.text || "Vous avez reçu un nouveau message."
-        );
-      }
-    }
+  missedCounts[room] = (missedCounts[room] || 0) + 1;
 
+  // 🔔 PUSH
+  await sendPushNotification(room, payload);
+
+  const parts = room.split(":");
+  const clientEmail = parts[2];
+
+  if (clientEmail) {
+    await sendEmailNotification(
+      clientEmail,
+      payload?.text || "Vous avez reçu un nouveau message."
+    );
+  }
+}
   } catch (err) {
     console.error("❌ notifyClient error:", err.message);
   }
