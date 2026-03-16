@@ -230,6 +230,15 @@ async function sendEmailNotification(toEmail, messageText) {
   }
 }
 // =======================
+// ADMIN STATUS TRACKING
+// =======================
+
+let adminLastSeen = Date.now();
+
+function updateAdminActivity() {
+  adminLastSeen = Date.now();
+}
+// =======================
 // CENTRAL NOTIFICATION HELPER (multi-devices + missed counter)
 // =======================
 
@@ -339,6 +348,23 @@ function appendNote(oldNote, newNote) {
 // =======================
 app.get("/", (req, res) => res.status(200).send("NovaPulse Bridge running 🚀"));
 app.get("/health", (req, res) => res.json({ ok: true }));
+// =======================
+// ADMIN STATUS
+// =======================
+
+app.get("/admin-status", (req,res)=>{
+
+const now = Date.now();
+const diff = now - adminLastSeen;
+
+const online = diff < 5 * 60 * 1000; // 5 minutes
+
+res.json({
+online,
+lastSeen: adminLastSeen
+});
+
+});
 // =======================
 // STRIPE REDIRECT MVP (SUCCESS / CANCEL)
 // =======================
@@ -508,6 +534,7 @@ if (
   message.message_thread_id &&
   !message.from?.is_bot
 ) {
+updateAdminActivity();
   const threadId = String(message.message_thread_id).trim();
   const text = (message.text || "").trim();
 
