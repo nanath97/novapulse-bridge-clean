@@ -166,24 +166,38 @@ i.addEventListener("input",updateTotal)
 
 function updateTotal(){
 
-let total=0
+let total = 0
 
 document.querySelectorAll("#rows tr").forEach(r=>{
 
-const qty=Number(r.children[1].querySelector("input").value||0)
-const price=Number(r.children[2].querySelector("input").value||0)
+const qty = Number(r.children[1].querySelector("input").value || 0)
+const price = Number(r.children[2].querySelector("input").value || 0)
 
-const line=qty*price
+const line = qty * price
 
-r.children[3].innerText=line+" €"
+r.children[3].innerText = line + " €"
 
-total+=line
+total += line
 
 })
 
-document.getElementById("total").innerText="Total : "+total+" €"
+// 👉 TVA dynamique
+const tvaInput = document.getElementById("tvaInput")
+const tva = Number(tvaInput?.value || 0)
+
+// sécurité
+const safeTva = isNaN(tva) ? 0 : Math.max(0, tva)
+
+// calcul
+const tvaAmount = total * (safeTva / 100)
+const totalTTC = total + tvaAmount
+
+// affichage propre
+document.getElementById("total").innerText =
+  `HT : ${total.toFixed(2)} € | TVA : ${tvaAmount.toFixed(2)} € | TTC : ${totalTTC.toFixed(2)} €`
 
 }
+document.getElementById("tvaInput").addEventListener("input", updateTotal)
 
 async function generate(){
 

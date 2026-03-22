@@ -1951,8 +1951,17 @@ doc.on("data", buffers.push.bind(buffers))
 
 // ===== WRITE PDF CONTENT =====
 // ===== Helpers =====
-const euro = (n) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(n || 0))
+const euro = (n) => {
+  const num = Number(n || 0).toFixed(2)
+
+  const parts = num.split(".")
+  let intPart = parts[0]
+  const decimal = parts[1]
+
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+
+  return `${intPart},${decimal} €`
+}
 
 // Marges
 const left = 50
