@@ -1932,7 +1932,7 @@ const doc = new PDFDocument({ margin: 40 })
 
 doc.font("Helvetica-Bold")
 doc.fontSize(32)
-doc.text("NovaPulse", { align: "center" })
+doc.text((sellerSlug || "NovaPulse").replace("-", " "), { align: "center" })
 
 doc.moveDown(0.3)
 
