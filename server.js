@@ -1414,6 +1414,42 @@ app.get("/pwa/payments", async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// =======================
+// PWA: GET SELLER TOTAL PAID (GLOBAL STATS)
+// =======================
+app.get("/pwa/seller-stats", async (req, res) => {
+  try {
+    const sellerSlug = normSlug(req.query.sellerSlug);
+
+    if (!sellerSlug) {
+      return res.json({ success: false, totalPaid: 0 });
+    }
+
+    const safeSlug = sellerSlug.replace(/'/g, "\\'");
+
+    const records = await tablePaymentLinks
+      .select({
+        filterByFormula: `AND(
+          {Status} = "Paid",
+          FIND('${safeSlug}_', {Content ID}) = 1
+        )`,
+        maxRecords: 1000,
+      })
+      .all();
+
+    console.log("📊 SELLER TOTAL PAID:", sellerSlug, records.length);
+
+    return res.json({
+      success: true,
+      totalPaid: records.length,
+    });
+
+  } catch (err) {
+    console.error("❌ /pwa/seller-stats error:", err.message);
+    return res.json({ success: false, totalPaid: 0 });
+  }
+});
 // =======================
 // GET TOPIC ID FOR PWA
 // =======================
