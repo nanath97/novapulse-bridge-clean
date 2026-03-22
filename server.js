@@ -1907,7 +1907,19 @@ app.post("/pwa/client-send-media", async (req, res) => {
 // =======================
 // GENERATE QUOTE PDF → TELEGRAM
 // =======================
+const records = await tablePWA
+.select({
+  filterByFormula: `{topic_id}='${topic}'`,
+  maxRecords: 1
+})
+.firstPage()
 
+let sellerSlug = "NovaPulse"
+
+if(records.length){
+  const row = records[0].fields
+  sellerSlug = normSlug(row.seller_slug)
+}
 app.post("/generate-quote", async (req,res)=>{
 
 try{
