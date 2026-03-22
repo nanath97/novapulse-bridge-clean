@@ -127,6 +127,10 @@ margin-top:15px;
 
 <div class="total" id="total">Total : 0 €</div>
 
+<div style="margin-top:15px">
+  <input id="tvaInput" type="number" placeholder="TVA (%) ex: 20" min="0" max="100">
+</div>
+
 <button class="generate" onclick="generate()">Générer le devis</button>
 
 <div class="footer">Propulsé par NovaPulse</div>
@@ -195,12 +199,16 @@ items.push({service,qty,price})
 
 })
 
+// 👉 TVA récupérée ici (AVANT le fetch)
+const tva = document.getElementById("tvaInput").value
+
 await fetch("/generate-quote",{
 method:"POST",
 headers:{ "Content-Type":"application/json" },
 body:JSON.stringify({
 topic,
-items
+items,
+tva
 })
 })
 

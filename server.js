@@ -1912,7 +1912,10 @@ app.post("/generate-quote", async (req,res)=>{
 
 try{
 
-const {topic,email,seller,items} = req.body
+const {topic,email,seller,items,tva} = req.body
+const tvaPercent = Number(tva || 0)
+const safeTvaPercent = isNaN(tvaPercent) ? 0 : Math.max(0, tvaPercent)
+const TVA_RATE = safeTvaPercent / 100
 
 console.log("🧾 GENERATE QUOTE REQUEST:", { topic, email, seller, items })
 
@@ -2034,12 +2037,52 @@ items.forEach((it) => {
 // ligne fin tableau
 hr(y - 6)
 
-// ===== Total (bloc à droite, propre) =====
+// ===== Totaux =====
+
+const totalHT = total
+const tvaAmount = totalHT * TVA_RATE
+const totalTTC = totalHT + tvaAmount
+
 y += 18
-doc.font("Helvetica-Bold").fontSize(12)
-doc.text("TOTAL", colPriceX, y, { width: colPriceW, align: "right" })
+
+doc.font("Helvetica").fontSize(11)
+
+doc.text("Total HT", colPriceX, y, {
+  width: colPriceW,
+  align: "right"
+})
+doc.text(euro(totalHT), colTotalX, y, {
+  width: colTotalW,
+  align: "right"
+})
+
+y += 18
+
+doc.text(`TVA (${safeTvaPercent}%)`, colPriceX, y, {
+  width: colPriceW,
+  align: "right"
+})
+doc.text(euro(tvaAmount), colTotalX, y, {
+  width: colTotalW,
+  align: "right"
+})
+
+y += 22
+
+doc.font("Helvetica-Bold").fontSize(13)
+
+doc.text("Total TTC", colPriceX, y, {
+  width: colPriceW,
+  align: "right"
+})
+
 doc.fontSize(16)
-doc.text(euro(total), colTotalX, y - 4, { width: colTotalW, align: "right" })
+
+doc.text(euro(totalTTC), colTotalX, y - 4, {
+  width: colTotalW,
+  align: "right"
+})
+
 
 // Footer
 doc.font("Helvetica").fontSize(9)
