@@ -1523,10 +1523,10 @@ app.post("/pwa/register-client", async (req, res) => {
       seller_slug: sellerSlug,
       topic_id: String(topicId),
 
-        type_client,
-        entreprise_nom,
-        siret,
-        tva,
+      type_client: type_client ? [type_client] : [],
+      entreprise_nom: entreprise_nom || "",
+      siret: siret || "",
+      tva: tva || "",
     });
 
     console.log("💾 Airtable client created:", email);
