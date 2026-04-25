@@ -1477,6 +1477,10 @@ app.post("/pwa/register-client", async (req, res) => {
   try {
     const email = normEmail(req.body.email);
     const sellerSlug = normSlug(req.body.sellerSlug);
+    const type_client = req.body.type_client || "particulier";
+    const entreprise_nom = req.body.entreprise_nom || "";
+    const siret = req.body.siret || "";
+    const tva = req.body.tva || "";
 
     if (!email || !sellerSlug) {
       return res
@@ -1518,6 +1522,11 @@ app.post("/pwa/register-client", async (req, res) => {
       email,
       seller_slug: sellerSlug,
       topic_id: String(topicId),
+
+        type_client,
+        entreprise_nom,
+        siret,
+        tva,
     });
 
     console.log("💾 Airtable client created:", email);
