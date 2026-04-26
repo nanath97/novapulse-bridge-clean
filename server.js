@@ -1471,6 +1471,43 @@ app.get("/pwa/get-topic", async (req, res) => {
 });
 
 // =======================
+// CHECK IF CLIENT EXISTS (LOGIN SMART)
+// =======================
+app.post("/pwa/check-client", async (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    const sellerSlug = normSlug(req.body.sellerSlug);
+
+    if (!email || !sellerSlug) {
+      return res.json({ success: false });
+    }
+
+    const records = await tablePWA
+      .select({
+        filterByFormula: `AND({email}='${email}', {seller_slug}='${sellerSlug}')`,
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (!records.length) {
+      return res.json({ success: true, exists: false });
+    }
+
+    const client = records[0].fields;
+
+    return res.json({
+      success: true,
+      exists: true,
+      clientData: client,
+    });
+
+  } catch (err) {
+    console.error("❌ /pwa/check-client error:", err.message);
+    return res.json({ success: false });
+  }
+});
+
+// =======================
 // REGISTER NEW PWA CLIENT (CREATE TOPIC + AIRTABLE)
 // =======================
 app.post("/pwa/register-client", async (req, res) => {
